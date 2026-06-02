@@ -8,6 +8,7 @@ import { errorHandler } from "./middleware/error";
 import { rateLimit } from "./middleware/rateLimit";
 import health from "./routes/health";
 import profiles from "./routes/profiles";
+import onchain from "./routes/onchain";
 
 const app = new Hono();
 
@@ -34,6 +35,7 @@ app.get("/", (c) =>
 
 app.route("/v1/health", health);
 app.route("/v1/profile", profiles);
+app.route("/v1/onchain", onchain);
 
 app.notFound((c) => c.json({ error: { message: "Not found", code: 404 } }, 404));
 

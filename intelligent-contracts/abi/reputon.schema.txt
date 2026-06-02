@@ -1,0 +1,88 @@
+{
+  ctor: { params: [], kwparams: {} },
+  methods: {
+    add_endorsement: {
+      params: [
+        [ 'target', 'address' ],
+        [ 'weight', 'int' ],
+        [ 'note', 'string' ]
+      ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    },
+    evaluate_and_update: {
+      params: [ [ 'target', 'address' ], [ 'signals_json', 'string' ] ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    },
+    get_contract_info: { params: [], kwparams: {}, readonly: true, ret: 'dict' },
+    get_endorsements_given: {
+      params: [ [ 'addr', 'address' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'array'
+    },
+    get_endorsements_received: {
+      params: [ [ 'addr', 'address' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'array'
+    },
+    get_history: {
+      params: [ [ 'addr', 'address' ], [ 'limit', 'int' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'array'
+    },
+    get_profile: {
+      params: [ [ 'addr', 'address' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'dict'
+    },
+    get_score: {
+      params: [ [ 'addr', 'address' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'dict'
+    },
+    has_profile: {
+      params: [ [ 'addr', 'address' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'bool'
+    },
+    register_profile: {
+      params: [ [ 'display_name', 'string' ], [ 'bio', 'string' ] ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    },
+    revoke_endorsement: {
+      params: [ [ 'target', 'address' ] ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    },
+    update_profile_metadata: {
+      params: [ [ 'display_name', 'string' ], [ 'bio', 'string' ] ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    },
+    verify_score: {
+      params: [ [ 'addr', 'address' ], [ 'expected_score', 'int' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'bool'
+    }
+  }
+}
+
