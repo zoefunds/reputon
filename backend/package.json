@@ -17,6 +17,7 @@
     "@reputon/db": "*",
     "dotenv": "16.4.7",
     "drizzle-orm": "0.36.4",
+    "genlayer-js": "1.1.8",
     "hono": "4.6.14",
     "ioredis": "5.4.1",
     "minio": "8.0.2",

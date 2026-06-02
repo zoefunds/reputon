@@ -73,7 +73,7 @@ Three providers are wired; each turns on automatically when its env vars are set
 - [x] Phase 1 — Design system & frontend shell
 - [x] Phase 2 — Marketing site
 - [x] Phase 3 — Postgres / Redis / Auth.js wiring
-- [ ] Phase 4 — Reputon intelligent contract
+- [x] Phase 4 — Reputon intelligent contract
 - [ ] Phase 5 — NFT + Sybil contracts
 - [ ] Phase 6 — Backend API (full surface)
 - [ ] Phase 7 — User dashboard
