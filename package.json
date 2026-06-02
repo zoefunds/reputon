@@ -1,0 +1,23 @@
+{
+  "name": "reputon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reputon — Universal On-Chain Reputation Layer powered by Genlayer Intelligent Contracts.",
+  "license": "UNLICENSED",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "env:check": "python3 scripts/env_check.py",
+    "dev": "python3 scripts/dev.py",
+    "install:all": "python3 scripts/install_all.py",
+    "deploy:all": "python3 scripts/deploy_all.py",
+    "frontend": "npm --workspace frontend run dev",
+    "backend": "npm --workspace backend run serve"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

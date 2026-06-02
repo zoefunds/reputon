@@ -1,0 +1,72 @@
+# ---- Node / npm ----
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ---- Next.js ----
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---- Build output ----
+dist/
+build/
+lib/
+*.log
+
+# ---- Environment ----
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+!.env.example
+
+# ---- Firebase ----
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+.firebaserc
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- Genlayer ----
+.genlayer/
+intelligent-contracts/abi/*.json
+!intelligent-contracts/abi/.gitkeep
+
+# ---- Testing ----
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Editor (just in case) ----
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ---- Local addresses written by deploy scripts ----
+.contract-addresses.json
