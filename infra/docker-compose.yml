@@ -1,0 +1,78 @@
+name: reputon
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: reputon-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-reputon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reputon}
+      POSTGRES_DB: ${POSTGRES_DB:-reputon}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-reputon} -d ${POSTGRES_DB:-reputon}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: reputon-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: reputon-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-reputon}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-reputonsecret}
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot job: creates the reputon-assets bucket on first start
+  minio-init:
+    image: minio/mc:latest
+    container_name: reputon-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-reputon} ${MINIO_ROOT_PASSWORD:-reputonsecret} &&
+      mc mb --ignore-existing local/${S3_BUCKET:-reputon-assets} &&
+      mc anonymous set download local/${S3_BUCKET:-reputon-assets} &&
+      echo 'bucket ready' &&
+      exit 0
+      "
+    restart: "no"
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:

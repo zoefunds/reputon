@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Logo } from "./Logo";
-import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
+import { UserMenu } from "./UserMenu";
 import { NAV_LINKS } from "@/lib/constants";
 
 export function Navbar() {
@@ -23,12 +23,7 @@ export function Navbar() {
           </nav>
         </div>
         <div className="flex items-center gap-2">
-          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-            <Link href="/sign-in">Sign in</Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link href="/dashboard">Launch app</Link>
-          </Button>
+          <UserMenu />
         </div>
       </Container>
     </header>

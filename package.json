@@ -6,15 +6,23 @@
   "license": "UNLICENSED",
   "workspaces": [
     "frontend",
-    "backend"
+    "backend",
+    "packages/db"
   ],
   "scripts": {
     "env:check": "python3 scripts/env_check.py",
-    "dev": "python3 scripts/dev.py",
-    "install:all": "python3 scripts/install_all.py",
-    "deploy:all": "python3 scripts/deploy_all.py",
-    "frontend": "npm --workspace frontend run dev",
-    "backend": "npm --workspace backend run serve"
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "infra:reset": "docker compose -f infra/docker-compose.yml down -v",
+    "db:generate": "npm --workspace @reputon/db run generate",
+    "db:migrate": "npm --workspace backend run migrate",
+    "db:seed": "npm --workspace backend run seed",
+    "dev:backend": "npm --workspace backend run dev",
+    "dev:frontend": "npm --workspace frontend run dev",
+    "build:frontend": "npm --workspace frontend run build",
+    "build:backend": "npm --workspace backend run build",
+    "typecheck": "npm --workspace frontend run typecheck && npm --workspace backend run typecheck"
   },
   "engines": {
     "node": ">=20.0.0",
