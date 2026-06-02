@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { Navbar } from "@/components/common/Navbar";
 import { Footer } from "@/components/common/Footer";
+import { AuthProvider } from "@/components/auth/AuthProvider";
 import { SITE } from "@/lib/constants";
 import "./globals.css";
 
@@ -55,9 +56,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body className="min-h-screen font-sans antialiased">
-        <Navbar />
-        <main className="flex flex-col">{children}</main>
-        <Footer />
+        <AuthProvider>
+          <Navbar />
+          <main className="flex flex-col">{children}</main>
+          <Footer />
+        </AuthProvider>
       </body>
     </html>
   );

@@ -27,12 +27,13 @@ lib/
 .env.test
 !.env.example
 
-# ---- Firebase ----
-.firebase/
-firebase-debug.log*
-firestore-debug.log*
-ui-debug.log*
-.firebaserc
+# ---- Docker / infra local data ----
+infra/.data/
+.docker/
+
+# ---- Drizzle ----
+# Migrations ARE committed; only the metadata snapshot lockfile shouldn't be edited by hand.
+# (kept here as a placeholder for future tooling)
 
 # ---- Python ----
 __pycache__/
