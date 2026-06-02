@@ -2,70 +2,95 @@
 
 Genlayer Python contracts that run on Genlayer StudioNet.
 
-## Phase 4 — `reputon.py`
+## Contracts
 
-The main reputation contract. One deployable file.
+| File                       | Status              | Address                                                                          |
+| -------------------------- | ------------------- | -------------------------------------------------------------------------------- |
+| `reputon.py`               | ✅ deployed (Phase 4) | `0xD7975CeA5549459d6eF0913a9fd919d17DE3d911`                                     |
+| `reputon_nft.py`           | 🚧 awaiting deploy   | _set via_ `scripts/set_contract_address.py nft 0x…`                              |
+| `sybil_oracle.py`          | 🚧 awaiting deploy   | _set via_ `scripts/set_contract_address.py sybil 0x…`                            |
+
+---
+
+## `reputon.py` — main reputation contract
+
+Profile, scoring, history, endorsements, AI evaluation. (See Phase 4 commit.)
+
+## `reputon_nft.py` — credential NFTs
+
+Mintable on-chain credentials (achievements, milestones, badges) bound to a
+wallet. Soulbound by default; per-tier transferability is configurable by the
+contract owner.
 
 ### Surface
 
-| Kind  | Method                                            | Notes                          |
-| ----- | ------------------------------------------------- | ------------------------------ |
-| write | `register_profile(display_name, bio)`             | Caller creates own profile     |
-| write | `update_profile_metadata(display_name, bio)`      | Caller-only edit               |
-| write | `evaluate_and_update(target, signals_json)`       | Invokes Genlayer LLM (eq.)     |
-| write | `add_endorsement(target, weight, note)`           | Caller endorses target         |
-| write | `revoke_endorsement(target)`                      |                                |
-| view  | `get_contract_info()`                             | version, owner, totals         |
-| view  | `has_profile(addr)`                               |                                |
-| view  | `get_profile(addr)`                               |                                |
-| view  | `get_score(addr)`                                 |                                |
-| view  | `verify_score(addr, expected)`                    | Off-chain gating helper        |
-| view  | `get_history(addr, limit)`                        | Newest-first, capped at 200    |
-| view  | `get_endorsements_given(addr)`                    |                                |
-| view  | `get_endorsements_received(addr)`                 |                                |
+| Kind  | Method                                                              | Notes                                  |
+| ----- | ------------------------------------------------------------------- | -------------------------------------- |
+| write | `mint(to, name, desc, image_uri, tier, metadata_json, transferable)` | Authorized minters / owner            |
+| write | `mint_self(name, desc, image_uri, tier, metadata_json)`             | Any wallet, only for self-mint tiers   |
+| write | `revoke(token_id)`                                                  | Owner or original minter               |
+| write | `transfer(token_id, to)`                                            | Only if tier is `transferable`         |
+| write | `set_authorized_minter(addr, allowed)` / `set_self_mint_allowed(...)` | Owner-only configuration             |
+| view  | `get_contract_info()` · `total_supply()`                            |                                        |
+| view  | `get_credential(token_id)` · `get_credentials_of(addr)`             |                                        |
+| view  | `has_credential(addr, tier)` · `is_self_mint_allowed(tier)`         |                                        |
+| view  | `is_authorized_minter(addr)`                                        |                                        |
 
-### LLM safety
+Tiers: `genesis` · `bronze` · `silver` · `gold` · `eternal` (genesis is
+self-mintable on deploy; others are admin-gated).
 
-`evaluate_and_update` runs its LLM call under
-`gl.eq_principle.prompt_comparative(...)`. Every validator re-runs the prompt
-and the equivalence criteria require the JSON outputs to agree on category
-and on score within ±25 (confidence within ±100). This is what makes the
-AI output safe to commit on-chain.
+## `sybil_oracle.py` — LLM-backed sybil detector
 
----
+Given an evidence bundle about a wallet (cluster siblings, endorsement graph,
+timing patterns), records a severity verdict produced by a Genlayer LLM under
+the equivalence principle. The main contract / backend consume this to gate
+risky behavior.
 
-## Deploy on Genlayer Studio (web)
+### Surface
 
-You said you'll handle deployment yourself. Steps:
-
-1. Open https://studio.genlayer.com/
-2. Click **New Contract** → name it `Reputon`.
-3. Open `intelligent-contracts/reputon.py` in your terminal:
-   ```bash
-   cat intelligent-contracts/reputon.py | pbcopy
-   ```
-   (copies the whole file to your clipboard on macOS)
-4. Paste the contract code into the Studio editor.
-5. Hit **Deploy**. The constructor takes no arguments.
-6. After deploy completes, copy the **contract address**.
-7. Paste the address back in chat — I'll wire it into `.env`, the backend,
-   the frontend, and verify the contract from terminal.
-
-That's it for your side.
+| Kind  | Method                                                | Notes                                            |
+| ----- | ----------------------------------------------------- | ------------------------------------------------ |
+| write | `analyze(target, evidence_json)`                      | Anyone may call; LLM verdict (`low`…`critical`)  |
+| write | `manual_flag(target, severity, reason, summary)`      | Owner / authorized reporters                     |
+| write | `resolve_flag(target, index)`                         | Owner-only                                       |
+| write | `set_authorized_reporter(addr, allowed)`              | Owner-only                                       |
+| view  | `get_contract_info()`                                 |                                                  |
+| view  | `get_flags(addr)` · `get_active_flags(addr)`          |                                                  |
+| view  | `get_severity(addr)`                                  | Highest active severity (`""` if none)           |
+| view  | `is_suspicious(addr, min_severity)`                   | Gating helper                                    |
+| view  | `list_flagged_addresses(limit)`                       |                                                  |
 
 ---
 
-## Optional: terminal deploy
-
-If you ever prefer a CLI deploy instead:
+## Your deploy step (Genlayer Studio)
 
 ```bash
-genlayer deploy \
-  --rpc $NEXT_PUBLIC_GENLAYER_RPC_URL \
-  --account $GENLAYER_ACCOUNT_ADDRESS \
-  --private-key $GENLAYER_ACCOUNT_PRIVATE_KEY \
-  --contract intelligent-contracts/reputon.py
+# Copy each file to your clipboard, paste into Studio, hit Deploy:
+cat intelligent-contracts/reputon_nft.py   | pbcopy   # → Studio → Deploy → copy address
+cat intelligent-contracts/sybil_oracle.py  | pbcopy   # → Studio → Deploy → copy address
 ```
 
-(Exact flags depend on your `genlayer` CLI version — `genlayer deploy --help`
-shows the current syntax. v0.39.x supports the form above.)
+Both constructors take no arguments. Paste both addresses back in chat. I'll:
+
+```bash
+python3 scripts/set_contract_address.py nft   0x…
+python3 scripts/set_contract_address.py sybil 0x…
+genlayer call 0x… get_contract_info        # verify each
+```
+
+…then wire backend services + routes (`/v1/onchain/nft/*`, `/v1/onchain/sybil/*`)
+and re-test end-to-end.
+
+---
+
+## CLI deploy (optional)
+
+If you ever want to deploy from the terminal instead of Studio web UI:
+
+```bash
+genlayer deploy intelligent-contracts/reputon_nft.py
+genlayer deploy intelligent-contracts/sybil_oracle.py
+```
+
+(Defaults to whatever network is selected — `genlayer network info` to check.
+Set with `genlayer network set studionet`.)
