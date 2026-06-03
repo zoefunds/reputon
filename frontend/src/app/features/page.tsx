@@ -11,6 +11,9 @@ import {
 import { Container } from "@/components/ui/container";
 import { Button } from "@/components/ui/button";
 import { CodePanel, tok } from "@/components/landing/CodePanel";
+import { getProtocolStats } from "@/lib/server/stats";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Features",
@@ -18,7 +21,8 @@ export const metadata: Metadata = {
     "Every primitive Reputon ships: dynamic scoring, AI evaluation, NFT credentials, sybil resistance, governance reputation and a unified API.",
 };
 
-export default function FeaturesPage() {
+export default async function FeaturesPage() {
+  const stats = await getProtocolStats();
   return (
     <>
       {/* Header */}
@@ -52,15 +56,12 @@ export default function FeaturesPage() {
               wallet behavior. We track velocity, contract interactions and
               liquidation history to ensure reputation is earned, not bought.
             </p>
-            <div className="mt-7 flex h-32 items-end gap-2 rounded-md bg-foreground/[0.04] p-3">
-              {[55, 38, 68, 52, 82, 70, 58, 90].map((h, i) => (
-                <div
-                  key={i}
-                  className="flex-1 rounded-sm bg-primary"
-                  style={{ height: `${h}%` }}
-                />
-              ))}
-            </div>
+            <dl className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <LiveStat label="Profiles" value={stats?.total_profiles ?? 0} />
+              <LiveStat label="Evaluations" value={stats?.total_evaluations ?? 0} />
+              <LiveStat label="Endorsements" value={stats?.total_endorsements ?? 0} />
+              <LiveStat label="Credentials" value={stats?.nft_supply ?? 0} />
+            </dl>
           </article>
 
           {/* Card 02: AI Contribution Grading (with PR analysis) */}
@@ -76,20 +77,11 @@ export default function FeaturesPage() {
               pull requests, proposals and Discord activity to grade the
               qualitative value of each contribution.
             </p>
-            <dl className="mt-6 space-y-2">
-              <div className="flex items-center justify-between border-t border-border/60 pt-3 text-[12.5px]">
-                <dt className="font-mono uppercase tracking-[0.14em] text-accent">
-                  pr_analysis
-                </dt>
-                <dd className="font-display text-[14px] font-semibold text-success">A+</dd>
-              </div>
-              <div className="flex items-center justify-between border-t border-border/60 pt-3 text-[12.5px]">
-                <dt className="font-mono uppercase tracking-[0.14em] text-accent">
-                  code_quality
-                </dt>
-                <dd className="font-display text-[14px] font-semibold text-foreground">98%</dd>
-              </div>
-            </dl>
+            <p className="mt-5 text-[12px] text-accent">
+              Every contribution gets a structured JSON grade with breakdown,
+              category, and a plain-English explanation written to the
+              contract.
+            </p>
           </article>
 
           {/* Card 03: LLM Equivalence (dark) */}
@@ -207,5 +199,18 @@ export default function FeaturesPage() {
         </Container>
       </section>
     </>
+  );
+}
+
+function LiveStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-border bg-background px-3 py-2">
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">
+        {label}
+      </p>
+      <p className="mt-1 font-display text-base font-semibold text-foreground">
+        {value.toLocaleString()}
+      </p>
+    </div>
   );
 }

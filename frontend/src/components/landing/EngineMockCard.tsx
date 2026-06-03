@@ -1,15 +1,16 @@
 /**
- * Mock "processor status" card used in the Engine hero. All-CSS, no images.
+ * Engine hero card. Reads live contract stats from /v1/onchain/info so every
+ * number on the page is real, never simulated.
  */
 import { Cpu } from "lucide-react";
+import type { ProtocolStats } from "@/lib/server/stats";
 
-const BARS = [62, 48, 80, 70, 90, 75];
-
-export function EngineMockCard() {
+export function EngineMockCard({ stats }: { stats: ProtocolStats | null }) {
+  const live = stats != null;
   return (
     <div className="relative rounded-2xl border border-border bg-card p-5 shadow-soft">
       <div className="absolute right-5 top-5 inline-flex h-6 items-center rounded-full border border-border bg-background px-2.5 font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
-        v2.4 stable
+        v{stats?.contract_version ?? 0}.0
       </div>
 
       <div className="flex items-start gap-3">
@@ -18,35 +19,37 @@ export function EngineMockCard() {
         </div>
         <div>
           <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-accent">
-            Processor status
+            Reputon contract
           </p>
           <p className="mt-1 font-mono text-[12px] text-foreground">
-            genlayer_executor_01 :: active
+            {live ? "studionet :: live" : "offline"}
           </p>
         </div>
       </div>
 
-      <div className="mt-5 grid grid-cols-6 items-end gap-1.5 rounded-md bg-foreground/[0.04] p-3 h-28">
-        {BARS.map((h, i) => (
-          <div
-            key={i}
-            className="rounded-sm bg-primary"
-            style={{ height: `${h}%` }}
-            aria-hidden
-          />
-        ))}
-      </div>
+      <dl className="mt-5 divide-y divide-border/70 border-y border-border/70">
+        <Row label="Profiles registered" value={stats?.total_profiles ?? 0} />
+        <Row label="Evaluations recorded" value={stats?.total_evaluations ?? 0} />
+        <Row label="Endorsements on-chain" value={stats?.total_endorsements ?? 0} />
+        <Row label="NFT credentials minted" value={stats?.nft_supply ?? 0} />
+      </dl>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
-        <div className="rounded-md border border-border bg-background px-3 py-2">
-          <p className="font-medium uppercase tracking-[0.16em] text-accent">Latency</p>
-          <p className="mt-1 font-mono text-[15px] font-semibold text-foreground">14 ms</p>
-        </div>
-        <div className="rounded-md border border-border bg-background px-3 py-2">
-          <p className="font-medium uppercase tracking-[0.16em] text-accent">Trust score</p>
-          <p className="mt-1 font-mono text-[15px] font-semibold text-foreground">99.98%</p>
-        </div>
-      </div>
+      <p className="mt-4 break-all font-mono text-[10.5px] text-accent">
+        Owner {stats?.owner.slice(0, 10) ?? "—"}…{stats?.owner.slice(-4) ?? ""}
+      </p>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="grid grid-cols-[1fr_auto] items-center gap-2 py-2.5">
+      <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-accent">
+        {label}
+      </dt>
+      <dd className="font-display text-[15px] font-semibold text-foreground">
+        {value.toLocaleString()}
+      </dd>
     </div>
   );
 }

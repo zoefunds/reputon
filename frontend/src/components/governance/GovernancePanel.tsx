@@ -215,7 +215,7 @@ export function GovernancePanel({ initialScore }: { initialScore: number | null 
  </p>
  <p className="mt-0.5 text-[11px] text-accent">
  <span className="font-mono">{v.proposal.space.name}</span> ·{" "}
- choice {Array.isArray(v.choice) ? v.choice.join(",") : v.choice} ·{" "}
+ choice {renderChoice(v.choice)} ·{" "}
  {new Date(v.created * 1000).toLocaleDateString()}
  </p>
  </li>
@@ -344,4 +344,27 @@ function Pane({
 
 function Empty({ children }: { children: React.ReactNode }) {
  return <p className="p-8 text-center text-[13px] text-accent">{children}</p>;
+}
+
+/**
+ * Snapshot returns vote `choice` in three shapes:
+ *  - single-choice: number
+ *  - approval/ranked: number[]
+ *  - weighted: { [optionIndex]: number }
+ * Stringify defensively so React never receives an object as a child.
+ */
+function renderChoice(c: unknown): string {
+ if (c == null) return "—";
+ if (typeof c === "number" || typeof c === "string") return String(c);
+ if (Array.isArray(c)) return c.join(",");
+ if (typeof c === "object") {
+   try {
+     return Object.entries(c as Record<string, unknown>)
+       .map(([k, v]) => `${k}:${v}`)
+       .join(", ");
+   } catch {
+     return "—";
+   }
+ }
+ return String(c);
 }

@@ -16,6 +16,9 @@ import { Section } from "@/components/common/Section";
 import { DarkSection } from "@/components/landing/DarkSection";
 import { EngineMockCard } from "@/components/landing/EngineMockCard";
 import { CodePanel, tok } from "@/components/landing/CodePanel";
+import { getProtocolStats } from "@/lib/server/stats";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Reputation Engine",
@@ -64,13 +67,25 @@ const FLOW = [
   },
 ];
 
-const STATS = [
-  { label: "Network throughput", value: "12.4k TPS", hint: "Optimized for high-frequency reputation updates in DeFi and gaming." },
-  { label: "Connected chains", value: "12+", hint: "EVM, Solana, Cosmos bridges live." },
-  { label: "Validators", value: "400", hint: "Decentralized AI consensus." },
-];
-
-export default function EnginePage() {
+export default async function EnginePage() {
+  const stats = await getProtocolStats();
+  const STATS = [
+    {
+      label: "Profiles registered",
+      value: (stats?.total_profiles ?? 0).toLocaleString(),
+      hint: "Wallets with an on-chain Reputon profile.",
+    },
+    {
+      label: "Evaluations recorded",
+      value: (stats?.total_evaluations ?? 0).toLocaleString(),
+      hint: "AI runs committed via the equivalence principle.",
+    },
+    {
+      label: "NFT credentials minted",
+      value: (stats?.nft_supply ?? 0).toLocaleString(),
+      hint: "Soulbound milestones recorded on-chain.",
+    },
+  ];
   return (
     <>
       {/* Hero */}
@@ -102,7 +117,7 @@ export default function EnginePage() {
               </Button>
             </div>
           </div>
-          <EngineMockCard />
+          <EngineMockCard stats={stats} />
         </Container>
       </section>
 

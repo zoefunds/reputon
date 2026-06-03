@@ -15,6 +15,9 @@ import { Section } from "@/components/common/Section";
 import { DarkSection } from "@/components/landing/DarkSection";
 import { ImageMockTile } from "@/components/landing/ImageMockTile";
 import { CodePanel, tok } from "@/components/landing/CodePanel";
+import { getProtocolStats } from "@/lib/server/stats";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Use cases",
@@ -22,7 +25,8 @@ export const metadata: Metadata = {
     "Lending, DAOs, gated access, identity, governance. Concrete ways Reputon's portable reputation slots into your protocol.",
 };
 
-export default function UseCasesPage() {
+export default async function UseCasesPage() {
+  const stats = await getProtocolStats();
   return (
     <>
       {/* Hero */}
@@ -97,16 +101,16 @@ export default function UseCasesPage() {
             </p>
             <div className="mt-6 rounded-md border border-border bg-background p-4">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
-                Risk assessment engine
+                Live on Genlayer StudioNet
               </p>
               <div className="mt-2 flex items-center justify-between">
                 <span className="font-display text-2xl font-semibold text-foreground">
-                  +28.4%
+                  {(stats?.total_evaluations ?? 0).toLocaleString()}
                 </span>
                 <Banknote className="h-5 w-5 text-success" />
               </div>
               <p className="mt-1 text-[11px] text-accent">
-                Origination uplift vs. collateral-only models in StudioNet pilots.
+                On-chain evaluations published so far.
               </p>
             </div>
           </article>
@@ -152,15 +156,19 @@ export default function UseCasesPage() {
             <div className="mt-6 grid grid-cols-2 gap-3 text-[11px]">
               <div className="rounded-md border border-primary-foreground/15 bg-primary-foreground/[0.05] p-3">
                 <p className="font-mono uppercase tracking-[0.16em] text-primary-foreground/60">
-                  Human score
+                  Active sybil flags
                 </p>
-                <p className="mt-1 font-display text-base font-semibold">99.8%</p>
+                <p className="mt-1 font-display text-base font-semibold">
+                  {(stats?.sybil_active_flags ?? 0).toLocaleString()}
+                </p>
               </div>
               <div className="rounded-md border border-primary-foreground/15 bg-primary-foreground/[0.05] p-3">
                 <p className="font-mono uppercase tracking-[0.16em] text-primary-foreground/60">
-                  Graph density
+                  Flagged wallets
                 </p>
-                <p className="mt-1 font-display text-base font-semibold">Low risk</p>
+                <p className="mt-1 font-display text-base font-semibold">
+                  {(stats?.sybil_flagged_addresses ?? 0).toLocaleString()}
+                </p>
               </div>
             </div>
           </article>

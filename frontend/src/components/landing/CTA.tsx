@@ -3,8 +3,9 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { ReputonIdCard } from "./ReputonIdCard";
+import type { ProtocolStats } from "@/lib/server/stats";
 
-export function CTA() {
+export function CTA({ stats }: { stats: ProtocolStats | null }) {
   return (
     <section className="pb-24 sm:pb-32">
       <Container>
@@ -41,7 +42,7 @@ export function CTA() {
 
           <div className="relative flex items-center justify-center px-8 pb-10 sm:px-0 sm:pb-0">
             <div aria-hidden className="absolute inset-0 -z-10 bg-noise opacity-30" />
-            <ReputonIdCard />
+            <ReputonIdCard stats={stats} />
           </div>
         </div>
       </Container>

@@ -29,8 +29,9 @@ function trustLabel(category?: string | null) {
     case "emerging":
       return "Emerging";
     case "unverified":
-    default:
       return "Unverified";
+    default:
+      return "—";
   }
 }
 
@@ -55,20 +56,14 @@ export default async function DashboardOverview() {
   const latest = history?.history?.[0] ?? null;
   const entries = history?.history ?? [];
   const realScore = score?.score ?? null;
-
-  // Build 8 monthly bar values from history entries. Fall back to placeholder
-  // demo values so the chart isn't empty when the wallet has no on-chain data.
-  const bars: number[] =
-    entries.length >= 4
-      ? buildMonthlyBars(entries.map((e) => e.score))
-      : [120, 180, 220, 280, 360, 320, 500, realScore ?? 580];
+  const bars: number[] | null =
+    entries.length > 0 ? buildMonthlyBars(entries.map((e) => e.score)) : null;
 
   const display = user.name ?? "there";
   const displayName = display === "there" ? "there" : display.split(" ")[0];
 
   return (
     <Container className="space-y-6 py-10">
-      {/* Header */}
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">
@@ -79,21 +74,23 @@ export default async function DashboardOverview() {
           </h1>
           <p className="mt-2 max-w-xl text-[14.5px] leading-relaxed text-accent">
             {realScore != null
-              ? "Your reputation is evolving on-chain. Keep contributing to stay in the top tier."
-              : "Link a wallet and run your first evaluation to start building your portable reputation."}
+              ? "Your reputation is evolving on-chain."
+              : "Register a profile and run your first evaluation to start building your portable reputation."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href={address ? `/profile/${address}` : "/dashboard"}>
-              <Share2 className="h-4 w-4" />
-              Share attestation
-            </Link>
-          </Button>
+          {address && (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/profile/${address}`}>
+                <Share2 className="h-4 w-4" />
+                Share profile
+              </Link>
+            </Button>
+          )}
           <Button asChild size="sm">
             <Link href="/dashboard/settings">
               <UserCog className="h-4 w-4" />
-              Update profile
+              Settings
             </Link>
           </Button>
         </div>
@@ -108,9 +105,8 @@ export default async function DashboardOverview() {
         />
       ) : (
         <>
-          {/* Score + side stats row */}
+          {/* Score + side stats */}
           <section className="grid gap-4 lg:grid-cols-[1.7fr_1fr]">
-            {/* Main score card */}
             <div className="relative overflow-hidden rounded-2xl border-l-2 border-foreground bg-card p-7 shadow-soft">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -131,7 +127,7 @@ export default async function DashboardOverview() {
                         }
                       >
                         {latest.delta > 0 ? "+" : ""}
-                        {latest.delta}pts vs ly
+                        {latest.delta} last eval
                       </span>
                     )}
                   </div>
@@ -146,45 +142,46 @@ export default async function DashboardOverview() {
                 </div>
               </div>
 
-              {/* Bar chart */}
-              <div className="mt-8 h-44 w-full">
-                <div className="flex h-full items-end gap-3">
-                  {bars.map((v, i) => {
-                    const max = Math.max(...bars, 1);
-                    const h = Math.max(8, (v / max) * 100);
-                    // gradient: lighter at start, darker (primary) at end
-                    const tone = `hsl(220 19% ${Math.max(
-                      18,
-                      80 - (i / (bars.length - 1)) * 60
-                    )}%)`;
-                    return (
-                      <div
+              {bars ? (
+                <div className="mt-8 h-44 w-full">
+                  <div className="flex h-full items-end gap-3">
+                    {bars.map((v, i) => {
+                      const max = Math.max(...bars, 1);
+                      const h = Math.max(8, (v / max) * 100);
+                      const tone = `hsl(220 19% ${Math.max(
+                        18,
+                        80 - (i / Math.max(1, bars.length - 1)) * 60
+                      )}%)`;
+                      return (
+                        <div key={i} className="flex flex-1 flex-col items-center gap-2">
+                          <div
+                            className="w-full rounded-sm transition-all"
+                            style={{ height: `${h}%`, background: tone }}
+                            title={`${MONTH_LABELS[i] ?? ""}: ${v}`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    {bars.map((_, i) => (
+                      <span
                         key={i}
-                        className="flex flex-1 flex-col items-center gap-2"
+                        className="flex-1 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-accent"
                       >
-                        <div
-                          className="w-full rounded-sm transition-all"
-                          style={{ height: `${h}%`, background: tone }}
-                          title={`${MONTH_LABELS[i] ?? ""}: ${v}`}
-                        />
-                      </div>
-                    );
-                  })}
+                        {MONTH_LABELS[i] ?? `M${i + 1}`}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div className="mt-3 flex items-center gap-3">
-                  {bars.map((_, i) => (
-                    <span
-                      key={i}
-                      className="flex-1 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-accent"
-                    >
-                      {MONTH_LABELS[i] ?? `M${i + 1}`} 24
-                    </span>
-                  ))}
-                </div>
-              </div>
+              ) : (
+                <p className="mt-10 rounded-md border border-dashed border-border bg-background p-6 text-center text-[13px] text-accent">
+                  No score history yet. Once your first AI evaluation runs, the
+                  timeline will populate here.
+                </p>
+              )}
             </div>
 
-            {/* Side stats stack */}
             <div className="grid gap-4">
               <SideStat
                 icon={<Clock className="h-3.5 w-3.5" />}
@@ -197,151 +194,148 @@ export default async function DashboardOverview() {
               />
               <SideStat
                 icon={<Zap className="h-3.5 w-3.5" />}
-                label="Protocol activity"
+                label="Evaluations"
                 value={
-                  realScore != null
-                    ? realScore >= 800
-                      ? "Top 5%"
-                      : realScore >= 500
-                      ? "Top 20%"
-                      : realScore >= 200
-                      ? "Top 50%"
-                      : "Building"
-                    : "—"
+                  (score && "evaluations" in score
+                    ? (score as { evaluations?: number }).evaluations
+                    : null) ?? entries.length
                 }
               />
               <SideStat
                 icon={<Fingerprint className="h-3.5 w-3.5" />}
-                label="Sybil resistance"
+                label="Sybil severity"
                 value={
-                  <span className="flex items-center gap-2">
-                    {sybilLevel(sybil?.severity ?? "")}
-                    {!sybil?.severity && (
-                      <span className="rounded-full bg-foreground px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-background">
-                        Elite
-                      </span>
-                    )}
+                  <span className="font-display text-2xl font-semibold tracking-tight text-foreground">
+                    {sybil?.severity || "none"}
                   </span>
                 }
               />
             </div>
           </section>
 
-          {/* Score Breakdown + Recent Activity row */}
+          {/* Breakdown + recent activity */}
           <section className="grid gap-4 lg:grid-cols-2">
-            {/* Score breakdown */}
             <div className="rounded-2xl border border-border bg-card p-7 shadow-soft">
               <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
                 Score Breakdown
               </h2>
-              <div className="mt-6 space-y-6">
-                <ProgressRow
-                  n="01"
-                  label="Governance participation"
-                  value={latest?.breakdown?.governance ?? 92}
-                  max={250}
-                  caption="Voting and proposal authorship across DAOs."
-                />
-                <ProgressRow
-                  n="02"
-                  label="Lending & liquidity"
-                  value={latest?.breakdown?.activity ?? 78}
-                  max={250}
-                  caption="On-chain capital activity and consistency."
-                />
-                <ProgressRow
-                  n="03"
-                  label="Open source contributions"
-                  value={latest?.breakdown?.contribution ?? 64}
-                  max={250}
-                  caption="Pull requests merged into protocol repositories."
-                />
-              </div>
+              {latest?.breakdown ? (
+                <div className="mt-6 space-y-6">
+                  <ProgressRow
+                    n="01"
+                    label="Activity"
+                    value={latest.breakdown.activity ?? 0}
+                    max={250}
+                  />
+                  <ProgressRow
+                    n="02"
+                    label="Governance"
+                    value={latest.breakdown.governance ?? 0}
+                    max={250}
+                  />
+                  <ProgressRow
+                    n="03"
+                    label="Contribution"
+                    value={latest.breakdown.contribution ?? 0}
+                    max={250}
+                  />
+                  <ProgressRow
+                    n="04"
+                    label="Trust"
+                    value={latest.breakdown.trust ?? 0}
+                    max={250}
+                  />
+                </div>
+              ) : (
+                <p className="mt-6 rounded-md border border-dashed border-border bg-background p-6 text-center text-[13px] text-accent">
+                  No breakdown yet. Your next evaluation will populate per-category
+                  scores here.
+                </p>
+              )}
             </div>
 
-            {/* Recent activity (dark) */}
             <div className="rounded-2xl bg-primary p-7 text-primary-foreground shadow-soft">
               <h2 className="font-display text-xl font-semibold tracking-tight">
                 Recent Activity
               </h2>
-              <ul className="mt-6 divide-y divide-primary-foreground/10">
-                {(entries.length > 0
-                  ? entries.slice(0, 4).map((e) => ({
-                      kind: e.reason || "score updated",
-                      title: e.explanation?.slice(0, 90) ?? "On-chain evaluation",
-                      ago: formatAgo(e.created_at),
-                    }))
-                  : SAMPLE_ACTIVITY
-                ).map((item, i) => (
-                  <li key={i} className="grid grid-cols-[1fr_auto] gap-3 py-3">
-                    <div>
-                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary-foreground/60">
-                        {item.kind}
-                      </p>
-                      <p className="mt-1 line-clamp-1 text-[13.5px] text-primary-foreground">
-                        {item.title}
-                      </p>
-                    </div>
-                    <p className="self-start font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/60">
-                      {item.ago}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-              <Link
-                href="/dashboard/history"
-                className="mt-5 block rounded-md border border-primary-foreground/30 px-4 py-2 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-primary-foreground hover:bg-primary-foreground/[0.06]"
-              >
-                View full history
-              </Link>
+              {entries.length > 0 ? (
+                <>
+                  <ul className="mt-6 divide-y divide-primary-foreground/10">
+                    {entries.slice(0, 4).map((e, i) => (
+                      <li key={i} className="grid grid-cols-[1fr_auto] gap-3 py-3">
+                        <div>
+                          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary-foreground/60">
+                            {e.reason || "score update"}
+                          </p>
+                          <p className="mt-1 line-clamp-1 text-[13.5px] text-primary-foreground">
+                            {e.explanation ?? "On-chain evaluation"}
+                          </p>
+                        </div>
+                        <p className="self-start font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/60">
+                          {e.created_at ? formatAgo(e.created_at) : ""}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link
+                    href="/dashboard/history"
+                    className="mt-5 block rounded-md border border-primary-foreground/30 px-4 py-2 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-primary-foreground hover:bg-primary-foreground/[0.06]"
+                  >
+                    View full history
+                  </Link>
+                </>
+              ) : (
+                <p className="mt-6 rounded-md border border-dashed border-primary-foreground/30 p-6 text-center text-[13px] text-primary-foreground/70">
+                  No activity recorded on-chain yet.
+                </p>
+              )}
             </div>
           </section>
 
-          {/* AI Insight */}
-          <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
-            <div className="grid items-center gap-0 lg:grid-cols-[1.4fr_1fr]">
-              <div className="p-8 sm:p-10">
-                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-warning">
-                  AI insight
-                </p>
-                <h2 className="mt-3 font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-                  {latest?.explanation
-                    ? truncate(latest.explanation, 130)
-                    : "Your reputation is gaining momentum in Governance circles."}
-                </h2>
-                <p className="mt-4 max-w-md text-[14px] leading-relaxed text-accent">
-                  By participating in the next Optimism Council election, your
-                  Governance score could reach 98/100, unlocking "Grand
-                  Delegate" status and reducing collateral requirements on
-                  partner protocols.
-                </p>
-                <Button asChild className="mt-6">
-                  <Link href="/dashboard/governance">
-                    <Sparkles className="h-4 w-4" />
-                    Explore delegation
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
+          {/* AI Insight — only when the contract has produced an explanation */}
+          {latest?.explanation && (
+            <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+              <div className="grid items-center gap-0 lg:grid-cols-[1.4fr_1fr]">
+                <div className="p-8 sm:p-10">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-warning">
+                    AI insight
+                  </p>
+                  <h2 className="mt-3 font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                    {truncate(latest.explanation, 130)}
+                  </h2>
+                  <p className="mt-4 max-w-md text-[14px] leading-relaxed text-accent">
+                    Latest AI evaluation from the Reputon contract. Run another
+                    via the Analyzer to refresh.
+                  </p>
+                  <Button asChild className="mt-6">
+                    <Link href="/dashboard/analyzer">
+                      <Sparkles className="h-4 w-4" />
+                      Run new evaluation
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+                <div className="relative h-full min-h-[220px]">
+                  <InsightArt />
+                </div>
               </div>
-              <div className="relative h-full min-h-[220px]">
-                <InsightArt />
-              </div>
-            </div>
-          </section>
+            </section>
+          )}
         </>
       )}
     </Container>
   );
 }
 
-/* ---------- helpers ---------- */
+/* helpers */
 
 function buildMonthlyBars(values: number[]): number[] {
+  if (values.length === 0) return [];
+  const target = Math.min(8, values.length);
   const out: number[] = [];
-  const step = Math.max(1, Math.floor(values.length / 8));
-  for (let i = 0; i < 8; i++) {
-    const v = values[i * step] ?? values[values.length - 1] ?? 0;
-    out.push(v);
+  const step = Math.max(1, Math.floor(values.length / target));
+  for (let i = 0; i < target; i++) {
+    out.push(values[i * step] ?? values[values.length - 1]);
   }
   return out;
 }
@@ -349,45 +343,25 @@ function buildMonthlyBars(values: number[]): number[] {
 function formatYearsSince(unixSec: number): string {
   if (!unixSec) return "—";
   const years = (Date.now() / 1000 - unixSec) / (365 * 24 * 60 * 60);
-  if (years < 0.1) return "< 1 mo";
-  if (years < 1) return `${Math.round(years * 12)} mo`;
+  if (years < 0.001) return "just now";
+  if (years < 0.083) return `${Math.max(1, Math.round(years * 365))} days`;
+  if (years < 1) return `${Math.round(years * 12)} months`;
   return `${years.toFixed(1)} years`;
 }
 
 function formatAgo(unixSec: number): string {
   if (!unixSec) return "—";
   const diff = Date.now() / 1000 - unixSec;
-  if (diff < 3600) return `${Math.max(1, Math.round(diff / 60))}M ago`;
-  if (diff < 86400) return `${Math.round(diff / 3600)}H ago`;
-  if (diff < 7 * 86400) return `${Math.round(diff / 86400)}D ago`;
-  return `${Math.round(diff / (7 * 86400))}W ago`;
-}
-
-function sybilLevel(severity: string) {
-  const map: Record<string, string> = {
-    "": "Level 09",
-    low: "Level 07",
-    medium: "Level 05",
-    high: "Level 03",
-    critical: "Level 01",
-  };
-  return (
-    <span className="font-display text-2xl font-semibold tracking-tight text-foreground">
-      {map[severity] ?? "Level 09"}
-    </span>
-  );
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.round(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.round(diff / 3600)}h ago`;
+  if (diff < 7 * 86400) return `${Math.round(diff / 86400)}d ago`;
+  return `${Math.round(diff / (7 * 86400))}w ago`;
 }
 
 function truncate(s: string, n: number) {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
-
-const SAMPLE_ACTIVITY = [
-  { kind: "vote cast", title: "Uniswap Proposal #42: Fee Switch Implementation", ago: "2H ago" },
-  { kind: "credential minted", title: "Aave Power User Tier 3 (ZKP-Attestation)", ago: "1D ago" },
-  { kind: "stake increased", title: "+5.2 ETH Staked on Lido Finance", ago: "3D ago" },
-  { kind: "lending action", title: "Full loan repayment on Morpho Blue", ago: "1W ago" },
-];
 
 function SideStat({
   icon,
@@ -416,13 +390,11 @@ function ProgressRow({
   label,
   value,
   max,
-  caption,
 }: {
   n: string;
   label: string;
   value: number;
   max: number;
-  caption: string;
 }) {
   const pct = Math.round((value / max) * 100);
   return (
@@ -438,7 +410,6 @@ function ProgressRow({
       <div className="mt-2 h-[3px] w-full overflow-hidden rounded-full bg-foreground/[0.06]">
         <div className="h-full bg-foreground" style={{ width: `${pct}%` }} />
       </div>
-      <p className="mt-2 text-[12px] text-accent">{caption}</p>
     </div>
   );
 }
@@ -475,16 +446,6 @@ function InsightArt() {
           />
         );
       })}
-      {Array.from({ length: 40 }).map((_, i) => (
-        <circle
-          key={i}
-          cx={(i * 53) % 600}
-          cy={(i * 89) % 400}
-          r={0.8}
-          fill="#fcd9a8"
-          opacity={0.45}
-        />
-      ))}
     </svg>
   );
 }
