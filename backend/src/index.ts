@@ -9,6 +9,8 @@ import { rateLimit } from "./middleware/rateLimit";
 import health from "./routes/health";
 import profiles from "./routes/profiles";
 import onchain from "./routes/onchain";
+import nft from "./routes/nft";
+import sybil from "./routes/sybil";
 
 const app = new Hono();
 
@@ -36,6 +38,8 @@ app.get("/", (c) =>
 app.route("/v1/health", health);
 app.route("/v1/profile", profiles);
 app.route("/v1/onchain", onchain);
+app.route("/v1/onchain/nft", nft);
+app.route("/v1/onchain/sybil", sybil);
 
 app.notFound((c) => c.json({ error: { message: "Not found", code: 404 } }, 404));
 
