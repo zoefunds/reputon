@@ -7,10 +7,10 @@
  * attempt — the engine team / user runs the contract write manually.
  */
 
-import { and, eq, lt, sql as raw, desc } from "drizzle-orm";
+import { and, eq, lt, desc } from "drizzle-orm";
 import { db, schema } from "./db";
 import { fanout } from "./webhooks";
-import { reputon } from "./genlayer";
+import { reputon, reputonAddress, writeReputon } from "./genlayer";
 
 export type JobStatus = "queued" | "running" | "done" | "failed";
 
@@ -93,9 +93,28 @@ async function runJob(job: typeof schema.evaluationJobs.$inferSelect) {
       "no on-chain signer configured (set GENLAYER_ACCOUNT_PRIVATE_KEY)"
     );
   }
-  // With a signer we'd call: client.writeContract({ functionName: 'evaluate_and_update', args: [job.address, JSON.stringify(job.signals)] })
-  // Left intentionally unimplemented until the protocol-runner private key is provisioned.
-  throw new Error("on-chain evaluate_and_update writes are gated until the signer service is provisioned");
+
+  const signalsJson = JSON.stringify(job.signals ?? {});
+  const txHash = await writeReputon("evaluate_and_update", [job.address, signalsJson]);
+
+  await db
+    .update(schema.evaluationJobs)
+    .set({ onchainTxHash: txHash, updatedAt: new Date() })
+    .where(eq(schema.evaluationJobs.id, job.id));
+
+  // Best-effort: fetch the new score and emit a webhook
+  try {
+    const score = await reputon.score(job.address);
+    await fanout("score.updated", {
+      address: job.address,
+      score: score?.score ?? null,
+      tx_hash: txHash,
+      job_id: job.id,
+    });
+  } catch {
+    /* ignore — score may not be readable yet */
+  }
+  void reputonAddress; // keep import live
 }
 
 /** Stale-job sweeper. Marks "running" jobs older than 10 minutes as failed. */

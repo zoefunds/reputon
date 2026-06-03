@@ -67,6 +67,42 @@ async function readAt<T = unknown>(
   throw new Error("genlayer-js client has neither readContract() nor call()");
 }
 
+async function writeAt(
+  address: Hex,
+  method: string,
+  args: unknown[] = []
+): Promise<string> {
+  if (!process.env.GENLAYER_ACCOUNT_PRIVATE_KEY) {
+    throw new Error("GENLAYER_ACCOUNT_PRIVATE_KEY not set — cannot write on-chain");
+  }
+  const c = client() as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+  if (typeof c.writeContract === "function") {
+    const out = (await c.writeContract({ address, functionName: method, args })) as
+      | string
+      | { hash?: string; transactionHash?: string };
+    if (typeof out === "string") return out;
+    return out?.hash ?? out?.transactionHash ?? "";
+  }
+  if (typeof c.write === "function") {
+    const out = (await c.write({ to: address, method, args })) as
+      | string
+      | { hash?: string };
+    if (typeof out === "string") return out;
+    return out?.hash ?? "";
+  }
+  throw new Error("genlayer-js client exposes neither writeContract() nor write()");
+}
+
+export function writeReputon(method: string, args: unknown[]) {
+  return writeAt(reputonAddress(), method, args);
+}
+export function writeReputonNft(method: string, args: unknown[]) {
+  return writeAt(reputonNftAddress(), method, args);
+}
+export function writeSybilOracle(method: string, args: unknown[]) {
+  return writeAt(sybilOracleAddress(), method, args);
+}
+
 export function isContractConfigured(kind: keyof typeof ADDR = "reputon"): boolean {
   const a = ADDR[kind];
   return Boolean(a && a.startsWith("0x"));

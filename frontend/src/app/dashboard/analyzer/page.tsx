@@ -1,12 +1,15 @@
-import { Sparkles } from "lucide-react";
-import Link from "next/link";
+import { Wallet } from "lucide-react";
 import { Container } from "@/components/ui/container";
-import { Button } from "@/components/ui/button";
+import { Analyzer } from "@/components/analyzer/Analyzer";
 import { EmptyState } from "@/components/dashboard/EmptyState";
+import { WalletLinker } from "@/components/dashboard/WalletLinker";
+import { requireUser } from "@/lib/server/user";
 
 export const dynamic = "force-dynamic";
 
-export default function AnalyzerPage() {
+export default async function AnalyzerPage() {
+  const user = await requireUser();
+
   return (
     <Container className="space-y-6 py-10">
       <div>
@@ -15,28 +18,23 @@ export default function AnalyzerPage() {
           Feed signals → score, on-chain.
         </h1>
         <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-accent">
-          Submit a signal bundle (GitHub work, governance, contributions) and
-          the Reputon Intelligent Contract runs a Genlayer LLM under the
-          equivalence principle to update your score with an attached AI
-          explanation.
+          Submit GitHub work, governance involvement and contributions. We
+          assemble the signal bundle, queue an on-chain evaluation, and stream
+          status back to this page. The Genlayer LLM runs under the equivalence
+          principle inside the contract.
         </p>
       </div>
 
-      <EmptyState
-        icon={<Sparkles className="h-4 w-4" />}
-        title="Analyzer UI coming in Phase 8"
-        body="The backend endpoint /v1/api/evaluate is live now — it queues an evaluation job and accepts your signals. In Phase 8 this page will ship the UI for it (GitHub picker, governance import, ad-hoc signals)."
-        action={
-          <div className="flex gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link href="/dashboard/api-keys">Create a key</Link>
-            </Button>
-            <Button asChild size="sm">
-              <Link href="/docs#api">Read /evaluate docs</Link>
-            </Button>
-          </div>
-        }
-      />
+      {!user.primaryWallet ? (
+        <EmptyState
+          icon={<Wallet className="h-4 w-4" />}
+          title="Link a wallet first"
+          body="Evaluations write to the contract keyed by wallet — link one to continue."
+          action={<WalletLinker />}
+        />
+      ) : (
+        <Analyzer />
+      )}
     </Container>
   );
 }
