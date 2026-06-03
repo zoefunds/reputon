@@ -67,6 +67,35 @@ Three providers are wired; each turns on automatically when its env vars are set
 | Google   | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`                |
 | Email    | `SMTP_HOST` (+ `SMTP_USER`/`SMTP_PASSWORD` if needed) |
 
+## Documentation
+
+| Doc                                       | What it covers                              |
+| ----------------------------------------- | ------------------------------------------- |
+| [`docs/architecture.md`](./docs/architecture.md) | System diagram, request flows, caching, scheduler |
+| [`docs/api.md`](./docs/api.md)                   | Full REST reference with curl examples + webhook signature verification |
+| [`docs/contracts.md`](./docs/contracts.md)       | Per-method access control, input clamps, sign-off checklist |
+| [`docs/security.md`](./docs/security.md)         | Threat model, scope matrix, CSRF, CSP, rate limits |
+| [`docs/runbook.md`](./docs/runbook.md)           | Incident-response playbook                  |
+| [`docs/env-setup.md`](./docs/env-setup.md)       | Every env var, defaults, production checklist |
+| [`docs/deployment.md`](./docs/deployment.md)     | Production deploy: infra → reverse proxy → backups → zero-downtime |
+
+## Deployed contracts (Genlayer StudioNet)
+
+| Contract            | Address                                       |
+| ------------------- | --------------------------------------------- |
+| Reputon (main)      | `0xD7975CeA5549459d6eF0913a9fd919d17DE3d911`  |
+| Reputon NFT         | `0xEC90A80be181Cb2F839A855B2db73406FCbaF34d`  |
+| Sybil Oracle        | `0x3E2cCF5a85217b00B5EFBC499922ec0EC5841408`  |
+
+## Tests
+
+```bash
+npm test                  # all suites (backend + frontend + contracts)
+npm run test:backend      # 14 vitest cases
+npm run test:frontend     # 8 vitest cases
+npm run test:contracts    # 10 python unittest cases
+```
+
 ## Phase progress
 
 - [x] Phase 0 — Foundations
@@ -83,7 +112,7 @@ Three providers are wired; each turns on automatically when its env vars are set
 - [x] Phase 11 — Admin dashboard
 - [x] Phase 12 — Security hardening
 - [x] Phase 13 — Testing
-- [ ] Phase 14 — Documentation
+- [x] Phase 14 — Documentation
 - [ ] Phase 15 — Production build
 
 ## License
