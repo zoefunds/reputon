@@ -22,7 +22,11 @@
     "dev:frontend": "npm --workspace frontend run dev",
     "build:frontend": "npm --workspace frontend run build",
     "build:backend": "npm --workspace backend run build",
-    "typecheck": "npm --workspace frontend run typecheck && npm --workspace backend run typecheck"
+    "typecheck": "npm --workspace frontend run typecheck && npm --workspace backend run typecheck",
+    "test:backend": "npm --workspace backend run test",
+    "test:frontend": "npm --workspace frontend run test",
+    "test:contracts": "python3 -m unittest intelligent-contracts/tests/test_contracts.py -v",
+    "test": "npm run test:backend && npm run test:frontend && npm run test:contracts"
   },
   "engines": {
     "node": ">=20.0.0",
