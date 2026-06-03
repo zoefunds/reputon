@@ -10,17 +10,22 @@ export function rateLimit(opts?: {
   windowSec?: number;
   max?: number;
   prefix?: string;
+  anonMax?: number;
 }): MiddlewareHandler {
   const window = opts?.windowSec ?? 60;
-  const max = opts?.max ?? env().API_RATE_LIMIT_PER_MIN;
+  const baseMax = opts?.max ?? env().API_RATE_LIMIT_PER_MIN;
+  const anonMax = opts?.anonMax ?? Math.max(15, Math.floor(baseMax / 4));
   const prefix = opts?.prefix ?? "rl:api";
 
   return async (c, next) => {
+    const caller = c.get("apiCaller");
     const ident =
-      c.req.header("x-api-key") ??
+      caller?.keyId ??
+      c.req.header("authorization")?.slice(0, 24) ??
       c.req.header("x-forwarded-for") ??
       c.req.header("x-real-ip") ??
       "anon";
+    const max = caller ? baseMax : anonMax;
     const key = `${prefix}:${ident}:${Math.floor(Date.now() / 1000 / window)}`;
     const r = redis();
     const count = await r.incr(key);

@@ -75,7 +75,7 @@ Three providers are wired; each turns on automatically when its env vars are set
 - [x] Phase 3 — Postgres / Redis / Auth.js wiring
 - [x] Phase 4 — Reputon intelligent contract
 - [x] Phase 5 — NFT + Sybil contracts
-- [ ] Phase 6 — Backend API (full surface)
+- [x] Phase 6 — Backend API (full surface)
 - [ ] Phase 7 — User dashboard
 - [ ] Phase 8 — Contribution analyzer
 - [ ] Phase 9 — Reputation NFT UI
