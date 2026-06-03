@@ -11,7 +11,9 @@
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
     "check": "tsx scripts/check.ts",
-    "promote-admin": "tsx scripts/promote_admin.ts"
+    "promote-admin": "tsx scripts/promote_admin.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@hono/node-server": "1.13.7",
@@ -29,6 +31,7 @@
     "@types/node": "22.10.5",
     "drizzle-kit": "0.28.1",
     "tsx": "4.19.2",
-    "typescript": "5.7.3"
+    "typescript": "5.7.3",
+    "vitest": "2.1.8"
   }
 }

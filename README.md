@@ -82,7 +82,7 @@ Three providers are wired; each turns on automatically when its env vars are set
 - [x] Phase 10 — Governance reputation
 - [x] Phase 11 — Admin dashboard
 - [x] Phase 12 — Security hardening
-- [ ] Phase 13 — Testing
+- [x] Phase 13 — Testing
 - [ ] Phase 14 — Documentation
 - [ ] Phase 15 — Production build
 
