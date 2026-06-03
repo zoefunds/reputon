@@ -392,6 +392,109 @@ export const auditLog = pgTable(
 );
 
 /* ------------------------------------------------------------------ */
+/* 4. API surface (keys, webhooks, deliveries)                         */
+/* ------------------------------------------------------------------ */
+
+export const apiKeyEnvEnum = pgEnum("api_key_env", ["test", "live"]);
+
+export const apiKeys = pgTable(
+  "api_key",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 80 }).notNull(),
+    env: apiKeyEnvEnum("env").notNull().default("test"),
+    prefix: varchar("prefix", { length: 16 }).notNull(), // first ~12 chars shown to UI
+    hashedSecret: varchar("hashed_secret", { length: 128 }).notNull(),
+    scopes: jsonb("scopes").$type<string[]>().notNull().default([]),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("api_key_user_idx").on(t.userId),
+    prefixUidx: uniqueIndex("api_key_prefix_uidx").on(t.prefix),
+    hashUidx: uniqueIndex("api_key_hashed_secret_uidx").on(t.hashedSecret),
+  })
+);
+
+export const webhooks = pgTable(
+  "webhook",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    secret: varchar("secret", { length: 80 }).notNull(),
+    eventTypes: jsonb("event_types").$type<string[]>().notNull().default([]),
+    active: boolean("active").notNull().default(true),
+    failCount: integer("fail_count").notNull().default(0),
+    lastStatus: integer("last_status"),
+    lastDeliveryAt: timestamp("last_delivery_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("webhook_user_idx").on(t.userId),
+  })
+);
+
+export const webhookDeliveries = pgTable(
+  "webhook_delivery",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    webhookId: uuid("webhook_id")
+      .notNull()
+      .references(() => webhooks.id, { onDelete: "cascade" }),
+    event: varchar("event", { length: 80 }).notNull(),
+    payload: jsonb("payload"),
+    statusCode: integer("status_code"),
+    responseBody: text("response_body"),
+    attempt: integer("attempt").notNull().default(1),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    webhookIdx: index("webhook_delivery_webhook_idx").on(t.webhookId),
+    eventIdx: index("webhook_delivery_event_idx").on(t.event),
+  })
+);
+
+export const evaluationJobs = pgTable(
+  "evaluation_job",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    address: varchar("address", { length: 64 }).notNull(),
+    chain: varchar("chain", { length: 32 }).notNull().default("genlayer"),
+    signals: jsonb("signals"),
+    status: varchar("status", { length: 24 }).notNull().default("queued"), // queued | running | done | failed
+    onchainTxHash: varchar("onchain_tx_hash", { length: 80 }),
+    error: text("error"),
+    attempts: integer("attempts").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    statusIdx: index("eval_job_status_idx").on(t.status),
+    addressIdx: index("eval_job_address_idx").on(t.address),
+  })
+);
+
+/* ------------------------------------------------------------------ */
 /* Inferred row types                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -415,3 +518,11 @@ export type SybilFlag = typeof sybilFlags.$inferSelect;
 export type GovernanceRecord = typeof governanceRecords.$inferSelect;
 export type Contribution = typeof contributions.$inferSelect;
 export type Wallet = typeof wallets.$inferSelect;
+
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type NewApiKey = typeof apiKeys.$inferInsert;
+export type Webhook = typeof webhooks.$inferSelect;
+export type NewWebhook = typeof webhooks.$inferInsert;
+export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
+export type EvaluationJob = typeof evaluationJobs.$inferSelect;
+export type NewEvaluationJob = typeof evaluationJobs.$inferInsert;
