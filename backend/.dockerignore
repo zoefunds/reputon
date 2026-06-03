@@ -1,0 +1,17 @@
+**/node_modules
+**/.next
+**/dist
+**/coverage
+**/playwright-report
+**/.env
+**/.env.local
+**/.docker
+**/.git
+**/.cache
+**/.turbo
+**/.DS_Store
+frontend/.next
+frontend/node_modules
+infra
+docs/screenshots
+assets/screenshots
