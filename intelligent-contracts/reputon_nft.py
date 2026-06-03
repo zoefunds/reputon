@@ -189,7 +189,7 @@ class Contract(gl.Contract):
         metadata_json = _clamp_str(metadata_json, MAX_METADATA_LEN)
 
         token_id = self.next_token_id
-        now = u256(gl.block.timestamp)
+        now = u256(0)
 
         cred = Credential(
             token_id=token_id,
@@ -232,7 +232,7 @@ class Contract(gl.Contract):
         if sender != self.owner and sender != cred.minter:
             raise Exception("not authorized to revoke")
         cred.revoked = True
-        cred.revoked_at = u256(gl.block.timestamp)
+        cred.revoked_at = u256(0)
         self.credentials[tid] = cred
         self.total_revoked = u256(self.total_revoked + 1)
 

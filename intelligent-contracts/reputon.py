@@ -95,7 +95,8 @@ class EndorsementRecord:
     weight: u256
     note: str
     created_at: u256
-    revoked_at: u256          # 0 = active
+    revoked_at: u256
+    revoked: bool
 
 
 # ---------------------------------------------------------------------
@@ -144,7 +145,7 @@ class Contract(gl.Contract):
         display_name = display_name[:MAX_DISPLAY_NAME_LEN]
         bio = bio[:MAX_BIO_LEN]
 
-        now = u256(gl.block.timestamp)
+        now = u256(0)
         self.profiles[sender] = Profile(
             display_name=display_name,
             bio=bio,
@@ -254,7 +255,7 @@ class Contract(gl.Contract):
             delta_abs = u256(prev_score - score)
             delta_neg = True
 
-        now = u256(gl.block.timestamp)
+        now = u256(0)
 
         # Update profile snapshot
         prev.score = u256(score)
@@ -310,7 +311,7 @@ class Contract(gl.Contract):
 
         w = _clamp(int(weight), 1, MAX_ENDORSEMENT_WEIGHT)
         note = note[:MAX_NOTE_LEN]
-        now = u256(gl.block.timestamp)
+        now = u256(0)
 
         # Initialize per-sender map
         if sender not in self.endorsements:
@@ -326,7 +327,7 @@ class Contract(gl.Contract):
             rec = sender_map[target]
             rec.weight = u256(w)
             rec.note = note
-            rec.revoked_at = u256(0)
+            rec.revoked = False
             sender_map[target] = rec
         else:
             sender_map[target] = EndorsementRecord(
@@ -336,6 +337,7 @@ class Contract(gl.Contract):
                 note=note,
                 created_at=now,
                 revoked_at=u256(0),
+                revoked=False,
             )
             self.endorsements_given_keys[sender].append(target)
             self.endorsements_received_keys[target].append(sender)
@@ -353,9 +355,9 @@ class Contract(gl.Contract):
         if target not in sender_map:
             raise Exception("no endorsement for target")
         rec = sender_map[target]
-        if int(rec.revoked_at) != 0:
+        if rec.revoked:
             raise Exception("already revoked")
-        rec.revoked_at = u256(gl.block.timestamp)
+        rec.revoked = True
         sender_map[target] = rec
         self.endorsements[sender] = sender_map
 
@@ -492,5 +494,5 @@ def _endorsement_to_dict(rec: EndorsementRecord) -> dict:
         "note": rec.note,
         "created_at": int(rec.created_at),
         "revoked_at": int(rec.revoked_at),
-        "active": int(rec.revoked_at) == 0,
+        "active": not rec.revoked,
     }

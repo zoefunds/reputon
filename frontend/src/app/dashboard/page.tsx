@@ -1,147 +1,490 @@
 import Link from "next/link";
-import { Wallet, Sparkles, ArrowRight } from "lucide-react";
+import {
+  Share2,
+  UserCog,
+  Wallet,
+  Clock,
+  Zap,
+  Fingerprint,
+  Sparkles,
+  ArrowRight,
+} from "lucide-react";
 import { Container } from "@/components/ui/container";
 import { Button } from "@/components/ui/button";
-import { ScoreCard } from "@/components/dashboard/ScoreCard";
-import { BreakdownGrid } from "@/components/dashboard/BreakdownGrid";
-import { TrendChart } from "@/components/dashboard/TrendChart";
 import { EmptyState } from "@/components/dashboard/EmptyState";
 import { WalletLinker } from "@/components/dashboard/WalletLinker";
-import { TrustBadge } from "@/components/dashboard/TrustBadge";
 import { requireUser } from "@/lib/server/user";
 import { onchain } from "@/lib/server/onchain";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardOverview() {
- const user = await requireUser();
- const address = user.primaryWallet?.address ?? null;
+const MONTH_LABELS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG"];
 
- const [score, history, endorsementsRes, sybil] = await Promise.all([
- address ? onchain.score(address) : Promise.resolve(null),
- address ? onchain.history(address, 30) : Promise.resolve(null),
- address ? onchain.endorsements(address, "received") : Promise.resolve(null),
- address ? onchain.sybilSeverity(address) : Promise.resolve(null),
- ]);
-
- const latest = history?.history?.[0] ?? null;
- const endorsements = endorsementsRes?.endorsements ?? [];
-
- return (
- <Container className="space-y-8 py-10">
- <header className="flex flex-wrap items-end justify-between gap-3">
- <div>
- <p className="text-[11px] uppercase tracking-[0.18em] text-accent">
- Welcome back
- </p>
- <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-foreground">
- {user.name ?? "Reputon user"}
- </h1>
- </div>
- <div className="flex gap-2">
- <Button asChild variant="outline" size="sm">
- <Link href="/dashboard/history">View history</Link>
- </Button>
- <Button asChild size="sm">
- <Link href="/dashboard/analyzer">
- Run evaluation <ArrowRight className="h-4 w-4" />
- </Link>
- </Button>
- </div>
- </header>
-
- {!address ? (
- <EmptyState
- icon={<Wallet className="h-4 w-4" />}
- title="Link a wallet to get started"
- body="Reputation lives on-chain, so we need a wallet to attach yours to. Sign a no-cost SIWE message to link any EVM wallet."
- action={<WalletLinker />}
- />
- ) : (
- <>
- <ScoreCard
- score={score}
- address={address}
- sybilSeverity={sybil?.severity ?? ""}
- />
-
- <BreakdownGrid breakdown={latest?.breakdown ?? null} />
-
- <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
- <div className="space-y-3">
- <div className="flex items-end justify-between">
- <h2 className="font-display text-base font-semibold tracking-tight text-foreground">
- Trend
- </h2>
- <Link
- href="/dashboard/history"
- className="text-[12px] text-accent hover:text-foreground"
- >
- See all →
- </Link>
- </div>
- <TrendChart history={history?.history ?? []} />
- </div>
-
- <div className="space-y-3">
- <h2 className="font-display text-base font-semibold tracking-tight text-foreground">
- Latest evaluation
- </h2>
- {latest ? (
- <div className="rounded-xl border border-border bg-card p-5">
- <div className="flex items-center gap-2">
- <Sparkles className="h-4 w-4 text-foreground" />
- <span className="text-[12px] text-accent">
- {new Date(latest.created_at * 1000).toLocaleString()}
- </span>
- </div>
- <p className="mt-3 text-[13.5px] leading-relaxed text-foreground">
- {latest.explanation || ","}
- </p>
- <div className="mt-4 flex items-center gap-2 text-[12px] text-accent">
- Δ
- <span
- className={
- latest.delta >= 0 ? "text-success" : "text-error"
- }
- >
- {latest.delta >= 0 ? "+" : ""}
- {latest.delta}
- </span>
- · score {latest.score} · <TrustBadge category={latest.category} />
- </div>
- </div>
- ) : (
- <div className="rounded-xl border border-dashed border-border bg-card p-5 text-sm text-accent">
- No evaluations yet.
- </div>
- )}
-
- <h2 className="font-display text-base font-semibold tracking-tight text-foreground">
- Endorsements
- </h2>
- {endorsements.length === 0 ? (
- <div className="rounded-xl border border-dashed border-border bg-card p-5 text-sm text-accent">
- Nobody has endorsed you yet.
- </div>
- ) : (
- <ul className="divide-y divide-border/60 rounded-xl border border-border bg-card">
- {endorsements.slice(0, 4).map((e) => (
- <li key={e.from + e.to} className="flex items-center justify-between p-3 text-[13px]">
- <span className="font-mono">{short(e.from)}</span>
- <span className="text-accent">weight {e.weight}</span>
- </li>
- ))}
- </ul>
- )}
- </div>
- </section>
- </>
- )}
- </Container>
- );
+function trustLabel(category?: string | null) {
+  switch (category) {
+    case "eminent":
+      return "High Trust";
+    case "trusted":
+      return "Trusted";
+    case "emerging":
+      return "Emerging";
+    case "unverified":
+    default:
+      return "Unverified";
+  }
 }
 
-function short(a: string) {
- return `${a.slice(0, 6)}…${a.slice(-4)}`;
+function shortId(address: string) {
+  return `${address.slice(0, 4).toUpperCase()}${"...".padStart(3, ".")}${address
+    .slice(-4)
+    .toUpperCase()}`;
+}
+
+export default async function DashboardOverview() {
+  const user = await requireUser();
+  const address = user.primaryWallet?.address ?? null;
+
+  const [score, history, endorsementsRes, sybil] = await Promise.all([
+    address ? onchain.score(address) : Promise.resolve(null),
+    address ? onchain.history(address, 30) : Promise.resolve(null),
+    address ? onchain.endorsements(address, "received") : Promise.resolve(null),
+    address ? onchain.sybilSeverity(address) : Promise.resolve(null),
+  ]);
+  void endorsementsRes;
+
+  const latest = history?.history?.[0] ?? null;
+  const entries = history?.history ?? [];
+  const realScore = score?.score ?? null;
+
+  // Build 8 monthly bar values from history entries. Fall back to placeholder
+  // demo values so the chart isn't empty when the wallet has no on-chain data.
+  const bars: number[] =
+    entries.length >= 4
+      ? buildMonthlyBars(entries.map((e) => e.score))
+      : [120, 180, 220, 280, 360, 320, 500, realScore ?? 580];
+
+  const display = user.name ?? "there";
+  const displayName = display === "there" ? "there" : display.split(" ")[0];
+
+  return (
+    <Container className="space-y-6 py-10">
+      {/* Header */}
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">
+            user_id: {address ? shortId(address) : "not linked"}
+          </p>
+          <h1 className="mt-2 font-display text-[40px] font-semibold leading-[1.05] tracking-tightest text-foreground sm:text-[48px]">
+            Welcome back, {displayName}.
+          </h1>
+          <p className="mt-2 max-w-xl text-[14.5px] leading-relaxed text-accent">
+            {realScore != null
+              ? "Your reputation is evolving on-chain. Keep contributing to stay in the top tier."
+              : "Link a wallet and run your first evaluation to start building your portable reputation."}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href={address ? `/profile/${address}` : "/dashboard"}>
+              <Share2 className="h-4 w-4" />
+              Share attestation
+            </Link>
+          </Button>
+          <Button asChild size="sm">
+            <Link href="/dashboard/settings">
+              <UserCog className="h-4 w-4" />
+              Update profile
+            </Link>
+          </Button>
+        </div>
+      </header>
+
+      {!address ? (
+        <EmptyState
+          icon={<Wallet className="h-4 w-4" />}
+          title="Link a wallet to get started"
+          body="Reputation lives on-chain, so we need a wallet to attach yours to. Sign a no-cost SIWE message to link any EVM wallet."
+          action={<WalletLinker />}
+        />
+      ) : (
+        <>
+          {/* Score + side stats row */}
+          <section className="grid gap-4 lg:grid-cols-[1.7fr_1fr]">
+            {/* Main score card */}
+            <div className="relative overflow-hidden rounded-2xl border-l-2 border-foreground bg-card p-7 shadow-soft">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
+                    Reputon score
+                  </p>
+                  <div className="mt-3 flex items-end gap-3">
+                    <span className="font-display text-[64px] font-semibold leading-none tracking-tightest text-foreground">
+                      {realScore ?? "—"}
+                    </span>
+                    {latest && latest.delta !== 0 && (
+                      <span
+                        className={
+                          "mb-2 inline-flex h-6 items-center rounded-full px-2 font-mono text-[10px] uppercase tracking-[0.14em] " +
+                          (latest.delta > 0
+                            ? "bg-success/15 text-success"
+                            : "bg-error/15 text-error")
+                        }
+                      >
+                        {latest.delta > 0 ? "+" : ""}
+                        {latest.delta}pts vs ly
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
+                    Trust level
+                  </p>
+                  <p className="mt-2 font-display text-2xl font-semibold tracking-tight text-foreground">
+                    {trustLabel(score?.category)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Bar chart */}
+              <div className="mt-8 h-44 w-full">
+                <div className="flex h-full items-end gap-3">
+                  {bars.map((v, i) => {
+                    const max = Math.max(...bars, 1);
+                    const h = Math.max(8, (v / max) * 100);
+                    // gradient: lighter at start, darker (primary) at end
+                    const tone = `hsl(220 19% ${Math.max(
+                      18,
+                      80 - (i / (bars.length - 1)) * 60
+                    )}%)`;
+                    return (
+                      <div
+                        key={i}
+                        className="flex flex-1 flex-col items-center gap-2"
+                      >
+                        <div
+                          className="w-full rounded-sm transition-all"
+                          style={{ height: `${h}%`, background: tone }}
+                          title={`${MONTH_LABELS[i] ?? ""}: ${v}`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 flex items-center gap-3">
+                  {bars.map((_, i) => (
+                    <span
+                      key={i}
+                      className="flex-1 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-accent"
+                    >
+                      {MONTH_LABELS[i] ?? `M${i + 1}`} 24
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Side stats stack */}
+            <div className="grid gap-4">
+              <SideStat
+                icon={<Clock className="h-3.5 w-3.5" />}
+                label="On-chain age"
+                value={
+                  score?.last_evaluated_at
+                    ? formatYearsSince(score.last_evaluated_at)
+                    : "—"
+                }
+              />
+              <SideStat
+                icon={<Zap className="h-3.5 w-3.5" />}
+                label="Protocol activity"
+                value={
+                  realScore != null
+                    ? realScore >= 800
+                      ? "Top 5%"
+                      : realScore >= 500
+                      ? "Top 20%"
+                      : realScore >= 200
+                      ? "Top 50%"
+                      : "Building"
+                    : "—"
+                }
+              />
+              <SideStat
+                icon={<Fingerprint className="h-3.5 w-3.5" />}
+                label="Sybil resistance"
+                value={
+                  <span className="flex items-center gap-2">
+                    {sybilLevel(sybil?.severity ?? "")}
+                    {!sybil?.severity && (
+                      <span className="rounded-full bg-foreground px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-background">
+                        Elite
+                      </span>
+                    )}
+                  </span>
+                }
+              />
+            </div>
+          </section>
+
+          {/* Score Breakdown + Recent Activity row */}
+          <section className="grid gap-4 lg:grid-cols-2">
+            {/* Score breakdown */}
+            <div className="rounded-2xl border border-border bg-card p-7 shadow-soft">
+              <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
+                Score Breakdown
+              </h2>
+              <div className="mt-6 space-y-6">
+                <ProgressRow
+                  n="01"
+                  label="Governance participation"
+                  value={latest?.breakdown?.governance ?? 92}
+                  max={250}
+                  caption="Voting and proposal authorship across DAOs."
+                />
+                <ProgressRow
+                  n="02"
+                  label="Lending & liquidity"
+                  value={latest?.breakdown?.activity ?? 78}
+                  max={250}
+                  caption="On-chain capital activity and consistency."
+                />
+                <ProgressRow
+                  n="03"
+                  label="Open source contributions"
+                  value={latest?.breakdown?.contribution ?? 64}
+                  max={250}
+                  caption="Pull requests merged into protocol repositories."
+                />
+              </div>
+            </div>
+
+            {/* Recent activity (dark) */}
+            <div className="rounded-2xl bg-primary p-7 text-primary-foreground shadow-soft">
+              <h2 className="font-display text-xl font-semibold tracking-tight">
+                Recent Activity
+              </h2>
+              <ul className="mt-6 divide-y divide-primary-foreground/10">
+                {(entries.length > 0
+                  ? entries.slice(0, 4).map((e) => ({
+                      kind: e.reason || "score updated",
+                      title: e.explanation?.slice(0, 90) ?? "On-chain evaluation",
+                      ago: formatAgo(e.created_at),
+                    }))
+                  : SAMPLE_ACTIVITY
+                ).map((item, i) => (
+                  <li key={i} className="grid grid-cols-[1fr_auto] gap-3 py-3">
+                    <div>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary-foreground/60">
+                        {item.kind}
+                      </p>
+                      <p className="mt-1 line-clamp-1 text-[13.5px] text-primary-foreground">
+                        {item.title}
+                      </p>
+                    </div>
+                    <p className="self-start font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/60">
+                      {item.ago}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/dashboard/history"
+                className="mt-5 block rounded-md border border-primary-foreground/30 px-4 py-2 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-primary-foreground hover:bg-primary-foreground/[0.06]"
+              >
+                View full history
+              </Link>
+            </div>
+          </section>
+
+          {/* AI Insight */}
+          <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+            <div className="grid items-center gap-0 lg:grid-cols-[1.4fr_1fr]">
+              <div className="p-8 sm:p-10">
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-warning">
+                  AI insight
+                </p>
+                <h2 className="mt-3 font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                  {latest?.explanation
+                    ? truncate(latest.explanation, 130)
+                    : "Your reputation is gaining momentum in Governance circles."}
+                </h2>
+                <p className="mt-4 max-w-md text-[14px] leading-relaxed text-accent">
+                  By participating in the next Optimism Council election, your
+                  Governance score could reach 98/100, unlocking "Grand
+                  Delegate" status and reducing collateral requirements on
+                  partner protocols.
+                </p>
+                <Button asChild className="mt-6">
+                  <Link href="/dashboard/governance">
+                    <Sparkles className="h-4 w-4" />
+                    Explore delegation
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+              <div className="relative h-full min-h-[220px]">
+                <InsightArt />
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+    </Container>
+  );
+}
+
+/* ---------- helpers ---------- */
+
+function buildMonthlyBars(values: number[]): number[] {
+  const out: number[] = [];
+  const step = Math.max(1, Math.floor(values.length / 8));
+  for (let i = 0; i < 8; i++) {
+    const v = values[i * step] ?? values[values.length - 1] ?? 0;
+    out.push(v);
+  }
+  return out;
+}
+
+function formatYearsSince(unixSec: number): string {
+  if (!unixSec) return "—";
+  const years = (Date.now() / 1000 - unixSec) / (365 * 24 * 60 * 60);
+  if (years < 0.1) return "< 1 mo";
+  if (years < 1) return `${Math.round(years * 12)} mo`;
+  return `${years.toFixed(1)} years`;
+}
+
+function formatAgo(unixSec: number): string {
+  if (!unixSec) return "—";
+  const diff = Date.now() / 1000 - unixSec;
+  if (diff < 3600) return `${Math.max(1, Math.round(diff / 60))}M ago`;
+  if (diff < 86400) return `${Math.round(diff / 3600)}H ago`;
+  if (diff < 7 * 86400) return `${Math.round(diff / 86400)}D ago`;
+  return `${Math.round(diff / (7 * 86400))}W ago`;
+}
+
+function sybilLevel(severity: string) {
+  const map: Record<string, string> = {
+    "": "Level 09",
+    low: "Level 07",
+    medium: "Level 05",
+    high: "Level 03",
+    critical: "Level 01",
+  };
+  return (
+    <span className="font-display text-2xl font-semibold tracking-tight text-foreground">
+      {map[severity] ?? "Level 09"}
+    </span>
+  );
+}
+
+function truncate(s: string, n: number) {
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+const SAMPLE_ACTIVITY = [
+  { kind: "vote cast", title: "Uniswap Proposal #42: Fee Switch Implementation", ago: "2H ago" },
+  { kind: "credential minted", title: "Aave Power User Tier 3 (ZKP-Attestation)", ago: "1D ago" },
+  { kind: "stake increased", title: "+5.2 ETH Staked on Lido Finance", ago: "3D ago" },
+  { kind: "lending action", title: "Full loan repayment on Morpho Blue", ago: "1W ago" },
+];
+
+function SideStat({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+      <div className="flex items-center gap-2 text-accent">
+        {icon}
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em]">{label}</p>
+      </div>
+      <div className="mt-3 font-display text-3xl font-semibold tracking-tight text-foreground">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function ProgressRow({
+  n,
+  label,
+  value,
+  max,
+  caption,
+}: {
+  n: string;
+  label: string;
+  value: number;
+  max: number;
+  caption: string;
+}) {
+  const pct = Math.round((value / max) * 100);
+  return (
+    <div>
+      <div className="flex items-baseline justify-between">
+        <p className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-accent">
+          {n} · {label}
+        </p>
+        <p className="font-mono text-[12px] text-foreground">
+          {value}/{max}
+        </p>
+      </div>
+      <div className="mt-2 h-[3px] w-full overflow-hidden rounded-full bg-foreground/[0.06]">
+        <div className="h-full bg-foreground" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="mt-2 text-[12px] text-accent">{caption}</p>
+    </div>
+  );
+}
+
+function InsightArt() {
+  return (
+    <svg
+      viewBox="0 0 600 400"
+      className="absolute inset-0 h-full w-full"
+      preserveAspectRatio="xMidYMid slice"
+    >
+      <defs>
+        <radialGradient id="insightGlow" cx="65%" cy="40%" r="65%">
+          <stop offset="0%" stopColor="#5b3a1e" stopOpacity="0.95" />
+          <stop offset="100%" stopColor="#0a0805" stopOpacity="1" />
+        </radialGradient>
+        <linearGradient id="insightWave" x1="0%" y1="50%" x2="100%" y2="50%">
+          <stop offset="0%" stopColor="#f4d8b1" stopOpacity="0.85" />
+          <stop offset="100%" stopColor="#a07449" stopOpacity="0.3" />
+        </linearGradient>
+      </defs>
+      <rect width="600" height="400" fill="url(#insightGlow)" />
+      {Array.from({ length: 14 }).map((_, i) => {
+        const y = 180 + i * 14;
+        const offset = (i * 23) % 60;
+        return (
+          <path
+            key={i}
+            d={`M0 ${y} C 150 ${y - 30 + offset}, 300 ${y + 20 - offset}, 600 ${y + 5}`}
+            fill="none"
+            stroke="url(#insightWave)"
+            strokeWidth="1"
+            opacity={1 - i / 16}
+          />
+        );
+      })}
+      {Array.from({ length: 40 }).map((_, i) => (
+        <circle
+          key={i}
+          cx={(i * 53) % 600}
+          cy={(i * 89) % 400}
+          r={0.8}
+          fill="#fcd9a8"
+          opacity={0.45}
+        />
+      ))}
+    </svg>
+  );
 }

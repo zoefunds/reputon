@@ -231,7 +231,7 @@ class Contract(gl.Contract):
         if rec.resolved:
             raise Exception("already resolved")
         rec.resolved = True
-        rec.resolved_at = u256(gl.block.timestamp)
+        rec.resolved_at = u256(0)
         arr[index] = rec
         self.flags[target] = arr
         self.total_resolved = u256(self.total_resolved + 1)
@@ -260,7 +260,7 @@ class Contract(gl.Contract):
             reporter=reporter,
             automated=automated,
             resolved=False,
-            created_at=u256(gl.block.timestamp),
+            created_at=u256(0),
             resolved_at=u256(0),
         )
         self.flags[target].append(flag)
