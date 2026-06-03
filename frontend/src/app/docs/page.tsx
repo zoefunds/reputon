@@ -218,7 +218,7 @@ export default function DocsPage() {
  />
 
  <Section>
- <div className="grid gap-12 lg:grid-cols-[220px_1fr]">
+ <div className="grid gap-12 lg:grid-cols-[200px_1fr_240px]">
  <aside className="lg:sticky lg:top-20 lg:self-start">
  <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-accent">
  On this page
@@ -248,6 +248,54 @@ export default function DocsPage() {
  </article>
  ))}
  </div>
+
+ <aside className="hidden lg:sticky lg:top-20 lg:block lg:self-start">
+ <div className="rounded-xl border border-border bg-card p-5 shadow-soft">
+ <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-accent">
+ Need help?
+ </p>
+ <p className="mt-3 text-[13.5px] leading-relaxed text-foreground">
+ Drop into the developer channel for integration help, or open an
+ issue on GitHub.
+ </p>
+ <div className="mt-4 space-y-2 text-[13px]">
+ <Link
+ href="/contact"
+ className="block text-foreground hover:underline underline-offset-4"
+ >
+ → Contact the team
+ </Link>
+ <a
+ href="https://github.com/zoefunds/reputon"
+ target="_blank"
+ rel="noreferrer"
+ className="block text-foreground hover:underline underline-offset-4"
+ >
+ → GitHub issues
+ </a>
+ <a
+ href="https://reputon-backend.fly.dev/v1/openapi.json"
+ target="_blank"
+ rel="noreferrer"
+ className="block text-foreground hover:underline underline-offset-4"
+ >
+ → OpenAPI spec
+ </a>
+ </div>
+ </div>
+
+ <div className="mt-4 rounded-xl border border-border bg-card p-5 shadow-soft">
+ <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-accent">
+ Live backend
+ </p>
+ <p className="mt-3 font-mono text-[11.5px] text-foreground break-all">
+ https://reputon-backend.fly.dev
+ </p>
+ <p className="mt-2 text-[11px] text-accent">
+ Try a public read in your terminal right now, no key required.
+ </p>
+ </div>
+ </aside>
  </div>
  </Section>
  </>
