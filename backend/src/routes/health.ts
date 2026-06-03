@@ -25,7 +25,7 @@ app.get("/", async (c) => {
     checks.redis = { ok: false, detail: (e as Error).message };
   }
 
-  // s3 (minio)
+  // s3 (minio / R2 / S3) — non-critical, used for NFT image hosting only.
   try {
     const ok = await storage().bucketExists(env().S3_BUCKET);
     checks.storage = { ok };
@@ -33,16 +33,19 @@ app.get("/", async (c) => {
     checks.storage = { ok: false, detail: (e as Error).message };
   }
 
+  // Health is OK if the two critical deps are up. Storage is reported but
+  // does not gate the 200 response — see docs/runbook.md.
+  const criticalOk = checks.postgres.ok && checks.redis.ok;
   const allOk = Object.values(checks).every((v) => v.ok);
   return c.json(
     {
-      status: allOk ? "ok" : "degraded",
+      status: allOk ? "ok" : criticalOk ? "degraded" : "down",
       service: "reputon-backend",
       version: "0.1.0",
       time: new Date().toISOString(),
       checks,
     },
-    allOk ? 200 : 503
+    criticalOk ? 200 : 503
   );
 });
 

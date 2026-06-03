@@ -1,6 +1,6 @@
 # Fly.io app config for the Reputon backend.
 # Deploy from the repo root with:
-#   flyctl deploy -c backend/fly.toml --dockerfile backend/Dockerfile
+#   flyctl deploy
 
 app = "reputon-backend"
 primary_region = "iad"             # change to your preferred region
