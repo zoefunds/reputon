@@ -71,3 +71,4 @@ desktop.ini
 
 # ---- Local addresses written by deploy scripts ----
 .contract-addresses.json
+.vercel
