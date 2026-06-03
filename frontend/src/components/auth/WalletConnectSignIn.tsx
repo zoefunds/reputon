@@ -1,5 +1,18 @@
 "use client";
 
+/**
+ * WalletConnect v2 sign-in via Universal Provider.
+ *
+ * The Universal Provider exposes a standard EIP-1193 interface over the
+ * WalletConnect protocol so we can call `request({ method, params })` the
+ * same way we do with browser extension wallets. The Reown relay handles
+ * the QR pairing and routes the user's signature back from their mobile
+ * wallet.
+ *
+ * Every phase logs to `console` with the `[reputon-wc]` prefix so DevTools
+ * shows exactly where things stand.
+ */
+
 import { useEffect, useRef, useState } from "react";
 import { signIn } from "next-auth/react";
 import { SiweMessage } from "siwe";
@@ -14,133 +27,164 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type SignClientLike = {
-  connect: (opts: unknown) => Promise<{ uri?: string; approval: () => Promise<unknown> }>;
-  request: (opts: unknown) => Promise<unknown>;
-  disconnect: (opts: unknown) => Promise<unknown>;
+type Eip1193 = {
+  request: <T = unknown>(args: { method: string; params?: unknown[] }) => Promise<T>;
 };
 
-type Session = {
-  topic: string;
-  namespaces: {
-    eip155?: { accounts: string[]; chains?: string[] };
-  };
+type Universal = Eip1193 & {
+  on: (event: string, listener: (...args: unknown[]) => void) => void;
+  off?: (event: string, listener: (...args: unknown[]) => void) => void;
+  removeListener?: (event: string, listener: (...args: unknown[]) => void) => void;
+  connect: (opts: unknown) => Promise<unknown>;
+  disconnect: () => Promise<void>;
+  session?: { topic: string };
 };
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "";
-const SUPPORTED_CHAINS = ["eip155:1", "eip155:8453", "eip155:10", "eip155:137"];
+
+type Phase =
+  | "idle"
+  | "initializing"
+  | "awaiting-scan"
+  | "awaiting-signature"
+  | "verifying"
+  | "done";
+
+function log(...args: unknown[]) {
+  if (typeof window !== "undefined") {
+    // eslint-disable-next-line no-console
+    console.info("[reputon-wc]", ...args);
+  }
+}
 
 function humanise(raw: string): string {
   const e = raw.toLowerCase();
-  if (e.includes("rejected") || e.includes("denied")) {
-    return "You rejected the request in your mobile wallet. Try again to sign in.";
+  if (e.includes("user rejected") || e.includes("rejected the request") || e.includes("user disapproved")) {
+    return "You rejected the request in your wallet. Try again.";
   }
-  if (e.includes("expired") || e.includes("timeout") || e.includes("timed out")) {
-    return "The pairing request expired before you approved it. Click connect again to get a fresh QR.";
+  if (e.includes("session topic doesn't exist") || e.includes("no matching key")) {
+    return "Pairing expired. Close this and click connect again to get a fresh QR.";
+  }
+  if (e.includes("relay") || e.includes("websocket")) {
+    return "Could not reach the WalletConnect relay. Check your network and retry.";
   }
   if (e.includes("credentialssignin")) {
-    return "Signature verification failed. Make sure your wallet is on the same chain you signed with.";
+    return "Signature verification failed on our server. Make sure your wallet is on the same chain you signed with, and retry.";
   }
-  return raw;
+  return raw || "WalletConnect sign-in failed.";
 }
 
 export function WalletConnectSignIn({ callbackUrl }: { callbackUrl: string }) {
   const [open, setOpen] = useState(false);
-  const [phase, setPhase] = useState<
-    "idle" | "starting" | "awaiting-scan" | "awaiting-signature" | "verifying" | "done"
-  >("idle");
+  const [phase, setPhase] = useState<Phase>("idle");
   const [uri, setUri] = useState<string | null>(null);
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qr, setQr] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const clientRef = useRef<SignClientLike | null>(null);
-  const sessionRef = useRef<Session | null>(null);
+  const providerRef = useRef<Universal | null>(null);
   const cancelledRef = useRef(false);
 
   useEffect(() => {
-    if (!uri) return;
-    QRCode.toDataURL(uri, { width: 256, margin: 1 })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(null));
+    if (!uri) {
+      setQr(null);
+      return;
+    }
+    QRCode.toDataURL(uri, { width: 280, margin: 1, errorCorrectionLevel: "M" })
+      .then(setQr)
+      .catch((e) => {
+        log("qr render error", e);
+        setQr(null);
+      });
   }, [uri]);
 
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
-      const session = sessionRef.current;
-      const client = clientRef.current;
-      if (session && client) {
-        client
-          .disconnect({
-            topic: session.topic,
-            reason: { code: 6000, message: "User cancelled" },
-          })
-          .catch(() => {});
-      }
+      const p = providerRef.current;
+      if (p?.session) p.disconnect().catch(() => {});
     };
   }, []);
 
-  if (!PROJECT_ID) return null;
+  if (!PROJECT_ID) {
+    log("missing NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID, hiding button");
+    return null;
+  }
 
   async function start() {
     setError(null);
+    setUri(null);
+    setQr(null);
     setOpen(true);
-    setPhase("starting");
+    setPhase("initializing");
     cancelledRef.current = false;
+    log("phase: initializing");
 
     try {
-      const { SignClient } = await import("@walletconnect/sign-client");
-      const client = (await SignClient.init({
+      const mod = await import("@walletconnect/universal-provider");
+      const UniversalProvider = mod.UniversalProvider ?? (mod as unknown as { default: typeof mod.UniversalProvider }).default;
+      log("module loaded", { hasInit: typeof UniversalProvider?.init === "function" });
+
+      const provider = (await UniversalProvider.init({
         projectId: PROJECT_ID,
+        relayUrl: "wss://relay.walletconnect.com",
         metadata: {
           name: "Reputon",
           description: "The Universal On-Chain Reputation Layer",
-          url: typeof window !== "undefined" ? window.location.origin : "https://reputon-mocha.vercel.app",
-          icons: [
+          url:
             typeof window !== "undefined"
-              ? `${window.location.origin}/favicon.svg`
-              : "https://reputon-mocha.vercel.app/favicon.svg",
+              ? window.location.origin
+              : "https://reputon-mocha.vercel.app",
+          icons: [
+            (typeof window !== "undefined"
+              ? window.location.origin
+              : "https://reputon-mocha.vercel.app") + "/favicon.svg",
           ],
         },
-      })) as unknown as SignClientLike;
-      clientRef.current = client;
+      })) as unknown as Universal;
+      providerRef.current = provider;
+      log("provider initialized");
 
-      const { uri: pairUri, approval } = await client.connect({
-        requiredNamespaces: {
+      // Listen for the display URI before we await `connect()`
+      provider.on("display_uri", (...args: unknown[]) => {
+        const u = args[0] as string;
+        log("display_uri", u.slice(0, 40) + "…");
+        if (cancelledRef.current) return;
+        setUri(u);
+        setPhase("awaiting-scan");
+      });
+
+      const accounts = await provider.connect({
+        namespaces: {
           eip155: {
             methods: ["personal_sign"],
             chains: ["eip155:1"],
             events: ["chainChanged", "accountsChanged"],
+            rpcMap: { 1: "https://cloudflare-eth.com" },
           },
         },
         optionalNamespaces: {
           eip155: {
             methods: ["personal_sign"],
-            chains: SUPPORTED_CHAINS,
+            chains: ["eip155:1", "eip155:8453", "eip155:10", "eip155:137"],
             events: ["chainChanged", "accountsChanged"],
+            rpcMap: { 1: "https://cloudflare-eth.com" },
           },
         },
       });
-
+      log("connect resolved", accounts);
       if (cancelledRef.current) return;
-      if (pairUri) {
-        setUri(pairUri);
-        setPhase("awaiting-scan");
-      }
 
-      const session = (await approval()) as Session;
-      if (cancelledRef.current) return;
-      sessionRef.current = session;
+      const ethAccounts = await provider.request<string[]>({ method: "eth_accounts" });
+      log("eth_accounts", ethAccounts);
+      const address = ethAccounts?.[0];
+      if (!address) throw new Error("Wallet returned no account.");
 
-      const account = session.namespaces.eip155?.accounts?.[0];
-      if (!account) throw new Error("Wallet returned no account.");
-      // 'eip155:1:0xabc...' → chainId + address
-      const parts = account.split(":");
-      const chainId = Number.parseInt(parts[1] ?? "1", 10);
-      const address = parts[2];
-      if (!address) throw new Error("Wallet returned no address.");
+      const chainIdHex = await provider.request<string>({ method: "eth_chainId" });
+      const chainId = Number.parseInt(chainIdHex, 16) || 1;
+      log("chainId", chainId);
 
       setPhase("awaiting-signature");
+      log("phase: awaiting-signature");
 
       const nonceRes = await fetch("/api/auth/siwe-nonce", { cache: "no-store" });
       const { nonce } = (await nonceRes.json()) as { nonce: string };
@@ -157,17 +201,15 @@ export function WalletConnectSignIn({ callbackUrl }: { callbackUrl: string }) {
       });
       const prepared = message.prepareMessage();
 
-      const signature = (await client.request({
-        topic: session.topic,
-        chainId: `eip155:${chainId}`,
-        request: {
-          method: "personal_sign",
-          params: [prepared, address],
-        },
-      })) as string;
-
+      const signature = await provider.request<string>({
+        method: "personal_sign",
+        params: [prepared, address],
+      });
+      log("signature received", signature.slice(0, 16) + "…");
       if (cancelledRef.current) return;
+
       setPhase("verifying");
+      log("phase: verifying");
 
       const res = await signIn("siwe", {
         message: JSON.stringify(message),
@@ -175,35 +217,39 @@ export function WalletConnectSignIn({ callbackUrl }: { callbackUrl: string }) {
         redirect: false,
         callbackUrl,
       });
+      log("signIn result", res);
       if (res?.error) throw new Error(res.error);
       if (res?.ok) {
         setPhase("done");
+        log("phase: done, redirecting to", res.url ?? callbackUrl);
         window.location.href = res.url ?? callbackUrl;
+      } else {
+        throw new Error("Sign-in returned no result.");
       }
     } catch (e) {
       if (cancelledRef.current) return;
-      const raw = e instanceof Error ? e.message : "WalletConnect failed.";
+      const raw = e instanceof Error ? e.message : String(e);
+      // eslint-disable-next-line no-console
+      console.error("[reputon-wc] error", e);
       setError(humanise(raw));
       setPhase("idle");
     }
   }
 
-  function close() {
+  async function close() {
+    log("close()");
     cancelledRef.current = true;
-    const session = sessionRef.current;
-    const client = clientRef.current;
-    if (session && client) {
-      client
-        .disconnect({
-          topic: session.topic,
-          reason: { code: 6000, message: "User cancelled" },
-        })
-        .catch(() => {});
+    const p = providerRef.current;
+    if (p?.session) {
+      try {
+        await p.disconnect();
+      } catch (e) {
+        log("disconnect failed", e);
+      }
     }
-    sessionRef.current = null;
-    clientRef.current = null;
+    providerRef.current = null;
     setUri(null);
-    setQrDataUrl(null);
+    setQr(null);
     setOpen(false);
     setPhase("idle");
   }
@@ -261,44 +307,45 @@ export function WalletConnectSignIn({ callbackUrl }: { callbackUrl: string }) {
             </div>
 
             <div className="mt-4 grid place-items-center">
-              {phase === "starting" && (
-                <div className="grid h-64 w-64 place-items-center text-accent">
-                  <Loader2 className="h-6 w-6 animate-spin" />
+              {phase === "initializing" && (
+                <div className="grid h-64 w-64 place-items-center text-center text-[13px] text-accent">
+                  <div>
+                    <Loader2 className="mx-auto h-6 w-6 animate-spin text-foreground" />
+                    <p className="mt-3">Opening WalletConnect relay…</p>
+                  </div>
                 </div>
               )}
 
-              {phase === "awaiting-scan" && qrDataUrl && (
+              {phase === "awaiting-scan" && qr && (
                 <>
                   <div className="rounded-lg border border-border bg-card p-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={qrDataUrl} alt="WalletConnect QR" className="h-64 w-64" />
+                    <img src={qr} alt="WalletConnect QR" className="h-64 w-64" />
                   </div>
                   <p className="mt-4 text-center text-[13px] text-accent">
-                    Open your mobile wallet, tap the scan button, and point at this QR.
+                    Scan this QR with MetaMask Mobile, Rainbow, Trust or any WalletConnect-compatible wallet.
                   </p>
-                  <div className="mt-3 flex w-full items-center gap-2">
-                    {uri && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={copyUri}
-                        className="flex-1"
-                      >
-                        {copied ? (
-                          <>
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3.5 w-3.5" />
-                            Copy connection URI
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </div>
+                  {uri && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={copyUri}
+                      className="mt-3 w-full"
+                    >
+                      {copied ? (
+                        <>
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5" />
+                          Copy connection URI
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </>
               )}
 
@@ -306,7 +353,7 @@ export function WalletConnectSignIn({ callbackUrl }: { callbackUrl: string }) {
                 <div className="grid h-64 w-64 place-items-center text-center text-[13px] text-accent">
                   <div>
                     <Loader2 className="mx-auto h-6 w-6 animate-spin text-foreground" />
-                    <p className="mt-3">Approve the sign-in message in your wallet.</p>
+                    <p className="mt-3">Approve the sign-in request in your wallet.</p>
                   </div>
                 </div>
               )}
@@ -338,7 +385,7 @@ export function WalletConnectSignIn({ callbackUrl }: { callbackUrl: string }) {
             )}
 
             <p className="mt-4 text-center text-[11px] text-accent">
-              Powered by WalletConnect. Works with MetaMask Mobile, Rainbow, Trust, Zerion and any other WalletConnect-compatible wallet.
+              Powered by WalletConnect v2. Works with MetaMask Mobile, Rainbow, Trust, Zerion, Phantom and any WalletConnect-compatible wallet.
             </p>
           </div>
         </div>

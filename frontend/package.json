@@ -31,8 +31,8 @@
     "siwe": "2.3.2",
     "tailwind-merge": "2.6.0",
     "qrcode": "1.5.4",
-    "@walletconnect/sign-client": "2.17.3",
-    "viem": "2.21.55"
+    "viem": "2.21.55",
+    "@walletconnect/universal-provider": "2.17.3"
   },
   "devDependencies": {
     "@types/node": "22.10.5",

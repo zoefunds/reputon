@@ -23,12 +23,26 @@ const CONNECT_SRC = [
   "https://hub.snapshot.org",
   "https://*.googleusercontent.com",
   "https://accounts.google.com",
-  // Wallet RPCs sometimes spawned by injected wallets; keep https: broad.
-  isProd ? "" : "ws://localhost:3000",
+  // WalletConnect / Reown — relay WebSocket + REST APIs + analytics
+  "wss://relay.walletconnect.com",
+  "wss://relay.walletconnect.org",
+  "https://*.walletconnect.com",
+  "https://*.walletconnect.org",
+  "https://*.reown.com",
+  "https://explorer-api.walletconnect.com",
+  "https://pulse.walletconnect.com",
+  // Dev only
+  isProd ? "" : "ws://localhost:*",
   isProd ? "" : "http://localhost:*",
 ]
   .filter(Boolean)
   .join(" ");
+
+const FRAME_SRC = [
+  "'self'",
+  "https://verify.walletconnect.com",
+  "https://verify.walletconnect.org",
+].join(" ");
 
 // In dev, Next needs 'unsafe-eval' for HMR; in prod we keep it strict.
 const SCRIPT_SRC = isProd
@@ -42,6 +56,7 @@ const CSP = [
   `img-src 'self' data: https:`,
   `font-src 'self' data: https://fonts.gstatic.com`,
   `connect-src ${CONNECT_SRC}`,
+  `frame-src ${FRAME_SRC}`,
   `frame-ancestors 'none'`,
   `base-uri 'self'`,
   `form-action 'self'`,
