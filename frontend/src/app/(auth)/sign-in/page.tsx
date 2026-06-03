@@ -3,12 +3,9 @@ import Link from "next/link";
 import { Container } from "@/components/ui/container";
 import { Logo } from "@/components/common/Logo";
 import { WalletSignIn } from "@/components/auth/WalletSignIn";
-import { WalletConnectSignIn } from "@/components/auth/WalletConnectSignIn";
 import { OAuthButton } from "@/components/auth/OAuthButton";
 import { EmailSignIn } from "@/components/auth/EmailSignIn";
 import { enabledProviders } from "../../../../auth";
-
-const hasWalletConnect = Boolean(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID);
 
 export const metadata: Metadata = {
  title: "Sign in",
@@ -44,8 +41,6 @@ export default async function SignInPage({ searchParams }: Props) {
 
  <div className="mt-8 space-y-3">
  <WalletSignIn callbackUrl={callbackUrl} />
-
- {hasWalletConnect && <WalletConnectSignIn callbackUrl={callbackUrl} />}
 
  {(enabledProviders.google || enabledProviders.email) && (
  <div className="relative my-4">
