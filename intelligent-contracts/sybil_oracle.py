@@ -1,15 +1,5 @@
-# =====================================================================
-# Reputon Sybil Oracle — LLM-backed suspicious-behavior detector
-# ---------------------------------------------------------------------
-# Deploy on Genlayer Studio:  https://studio.genlayer.com/
-#
-# Companion to `reputon.py`. Given a JSON evidence bundle about a wallet
-# (cluster siblings, endorsement graph, timing patterns, on-chain flags),
-# runs a Genlayer LLM call under the equivalence principle and stores a
-# severity verdict that the main contract / backend can consume.
-#
-# Severities: "low" | "medium" | "high" | "critical"
-# =====================================================================
+# v0.2.17
+# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
 from genlayer import *
 from dataclasses import dataclass
