@@ -1,0 +1,101 @@
+{
+  ctor: { params: [], kwparams: {} },
+  methods: {
+    get_contract_info: { params: [], kwparams: {}, readonly: true, ret: 'dict' },
+    get_credential: {
+      params: [ [ 'token_id', 'int' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'dict'
+    },
+    get_credentials_of: {
+      params: [ [ 'addr', 'address' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'array'
+    },
+    has_credential: {
+      params: [ [ 'addr', 'address' ], [ 'tier', 'string' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'bool'
+    },
+    is_authorized_minter: {
+      params: [ [ 'addr', 'address' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'bool'
+    },
+    is_self_mint_allowed: {
+      params: [ [ 'tier', 'string' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'bool'
+    },
+    mint: {
+      params: [
+        [ 'to', 'address' ],
+        [ 'name', 'string' ],
+        [ 'description', 'string' ],
+        [ 'image_uri', 'string' ],
+        [ 'tier', 'string' ],
+        [ 'metadata_json', 'string' ],
+        [ 'transferable', 'bool' ]
+      ],
+      kwparams: {},
+      readonly: false,
+      ret: 'int',
+      payable: false
+    },
+    mint_self: {
+      params: [
+        [ 'name', 'string' ],
+        [ 'description', 'string' ],
+        [ 'image_uri', 'string' ],
+        [ 'tier', 'string' ],
+        [ 'metadata_json', 'string' ]
+      ],
+      kwparams: {},
+      readonly: false,
+      ret: 'int',
+      payable: false
+    },
+    revoke: {
+      params: [ [ 'token_id', 'int' ] ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    },
+    set_authorized_minter: {
+      params: [ [ 'addr', 'address' ], [ 'allowed', 'bool' ] ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    },
+    set_self_mint_allowed: {
+      params: [ [ 'tier', 'string' ], [ 'allowed', 'bool' ] ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    },
+    total_supply: { params: [], kwparams: {}, readonly: true, ret: 'int' },
+    transfer: {
+      params: [ [ 'token_id', 'int' ], [ 'to', 'address' ] ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    },
+    transfer_ownership: {
+      params: [ [ 'new_owner', 'address' ] ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    }
+  }
+}
+

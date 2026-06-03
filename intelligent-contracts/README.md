@@ -7,8 +7,8 @@ Genlayer Python contracts that run on Genlayer StudioNet.
 | File                       | Status              | Address                                                                          |
 | -------------------------- | ------------------- | -------------------------------------------------------------------------------- |
 | `reputon.py`               | ✅ deployed (Phase 4) | `0xD7975CeA5549459d6eF0913a9fd919d17DE3d911`                                     |
-| `reputon_nft.py`           | 🚧 awaiting deploy   | _set via_ `scripts/set_contract_address.py nft 0x…`                              |
-| `sybil_oracle.py`          | 🚧 awaiting deploy   | _set via_ `scripts/set_contract_address.py sybil 0x…`                            |
+| `reputon_nft.py`           | ✅ deployed (Phase 5) | `0xEC90A80be181Cb2F839A855B2db73406FCbaF34d`                                     |
+| `sybil_oracle.py`          | ✅ deployed (Phase 5) | `0x3E2cCF5a85217b00B5EFBC499922ec0EC5841408`                                     |
 
 ---
 

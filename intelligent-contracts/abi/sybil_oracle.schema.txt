@@ -1,0 +1,83 @@
+{
+  ctor: { params: [], kwparams: {} },
+  methods: {
+    analyze: {
+      params: [ [ 'target', 'address' ], [ 'evidence_json', 'string' ] ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    },
+    get_active_flags: {
+      params: [ [ 'addr', 'address' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'array'
+    },
+    get_contract_info: { params: [], kwparams: {}, readonly: true, ret: 'dict' },
+    get_flags: {
+      params: [ [ 'addr', 'address' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'array'
+    },
+    get_severity: {
+      params: [ [ 'addr', 'address' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'string'
+    },
+    is_authorized_reporter: {
+      params: [ [ 'addr', 'address' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'bool'
+    },
+    is_suspicious: {
+      params: [ [ 'addr', 'address' ], [ 'min_severity', 'string' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'bool'
+    },
+    list_flagged_addresses: {
+      params: [ [ 'limit', 'int' ] ],
+      kwparams: {},
+      readonly: true,
+      ret: 'array'
+    },
+    manual_flag: {
+      params: [
+        [ 'target', 'address' ],
+        [ 'severity', 'string' ],
+        [ 'reason', 'string' ],
+        [ 'summary', 'string' ]
+      ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    },
+    resolve_flag: {
+      params: [ [ 'target', 'address' ], [ 'index', 'int' ] ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    },
+    set_authorized_reporter: {
+      params: [ [ 'addr', 'address' ], [ 'allowed', 'bool' ] ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    },
+    transfer_ownership: {
+      params: [ [ 'new_owner', 'address' ] ],
+      kwparams: {},
+      readonly: false,
+      ret: 'null',
+      payable: false
+    }
+  }
+}
+
