@@ -88,8 +88,11 @@ export function GovernancePanel({ initialScore }: { initialScore: number | null 
  }
  }
 
- const empty =
- activity && activity.votes.length === 0 && activity.proposals.length === 0;
+ // Defensive: the response may have missing fields if Snapshot is degraded.
+ const votes = activity?.votes ?? [];
+ const proposals = activity?.proposals ?? [];
+ const daos = activity?.daos ?? [];
+ const empty = activity != null && votes.length === 0 && proposals.length === 0;
  const baseScore = initialScore ?? 0;
 
  return (
@@ -102,8 +105,8 @@ export function GovernancePanel({ initialScore }: { initialScore: number | null 
  <p className="mt-1 text-[14px] text-foreground">
  {activity ? (
  <>
- {activity.votes.length} votes · {activity.proposals.length} proposals ·{" "}
- {activity.daos.length} DAOs
+ {votes.length} votes · {proposals.length} proposals ·{" "}
+ {daos.length} DAOs
  </>
  ) : busy ? (
  "Loading…"
@@ -142,10 +145,10 @@ export function GovernancePanel({ initialScore }: { initialScore: number | null 
  </div>
  )}
 
- {activity && activity.daos.length > 0 && (
+ {activity && daos.length > 0 && (
  <section>
  <h2 className="mb-3 font-display text-base font-semibold tracking-tight text-foreground">
- DAOs ({activity.daos.length})
+ DAOs ({daos.length})
  </h2>
  <div className="overflow-hidden rounded-xl border border-border bg-card">
  <table className="w-full text-sm">
@@ -160,7 +163,7 @@ export function GovernancePanel({ initialScore }: { initialScore: number | null 
  </tr>
  </thead>
  <tbody>
- {activity.daos.map((d) => (
+ {daos.map((d) => (
  <tr key={d.dao} className="border-b border-border/40 last:border-b-0">
  <td className="px-4 py-3">
  <Link
@@ -201,11 +204,11 @@ export function GovernancePanel({ initialScore }: { initialScore: number | null 
 
  <section className="grid gap-6 lg:grid-cols-2">
  <Pane title="Recent votes" icon={<Vote className="h-4 w-4" />}>
- {!activity?.votes.length ? (
+ {!votes.length ? (
  <Empty>No votes loaded.</Empty>
  ) : (
  <ul className="divide-y divide-border/60">
- {activity.votes.slice(0, 10).map((v) => (
+ {votes.slice(0, 10).map((v) => (
  <li key={v.id} className="p-3">
  <p className="line-clamp-1 text-[13px] text-foreground">
  {v.proposal.title}
@@ -222,11 +225,11 @@ export function GovernancePanel({ initialScore }: { initialScore: number | null 
  </Pane>
 
  <Pane title="Authored proposals" icon={<FileSignature className="h-4 w-4" />}>
- {!activity?.proposals.length ? (
+ {!proposals.length ? (
  <Empty>No authored proposals.</Empty>
  ) : (
  <ul className="divide-y divide-border/60">
- {activity.proposals.slice(0, 10).map((p) => (
+ {proposals.slice(0, 10).map((p) => (
  <li key={p.id} className="p-3">
  <p className="line-clamp-1 text-[13px] text-foreground">{p.title}</p>
  <p className="mt-0.5 text-[11px] text-accent">
@@ -254,8 +257,8 @@ function VoterWeight({
 }) {
  const [voteValue, setVoteValue] = useState<1 | -1 | 0>(1);
 
- const totalVotes = activity?.votes.length ?? 0;
- const authored = activity?.proposals.length ?? 0;
+ const totalVotes = activity?.votes?.length ?? 0;
+ const authored = activity?.proposals?.length ?? 0;
  const govBoost = Math.min(200, totalVotes * 2 + authored * 8);
  // Effective weight: base score (0,1000) + governance boost (0,200), clamped.
  const effective = Math.min(1200, baseScore + govBoost);
