@@ -79,7 +79,7 @@ Three providers are wired; each turns on automatically when its env vars are set
 - [x] Phase 7 — User dashboard
 - [x] Phase 8 — Contribution analyzer
 - [x] Phase 9 — Reputation NFT UI
-- [ ] Phase 10 — Governance reputation
+- [x] Phase 10 — Governance reputation
 - [ ] Phase 11 — Admin dashboard
 - [ ] Phase 12 — Security hardening
 - [ ] Phase 13 — Testing

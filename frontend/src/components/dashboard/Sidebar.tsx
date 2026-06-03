@@ -11,12 +11,14 @@ import {
   Settings,
   KeyRound,
   Webhook,
+  Vote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/analyzer", label: "Analyzer", icon: Sparkles },
+  { href: "/dashboard/governance", label: "Governance", icon: Vote },
   { href: "/dashboard/endorsements", label: "Endorsements", icon: Users },
   { href: "/dashboard/nfts", label: "Credentials", icon: Award },
   { href: "/dashboard/history", label: "History", icon: LineChart },
