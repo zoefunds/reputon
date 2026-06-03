@@ -113,7 +113,9 @@ npm run test:contracts    # 10 python unittest cases
 - [x] Phase 12 — Security hardening
 - [x] Phase 13 — Testing
 - [x] Phase 14 — Documentation
-- [ ] Phase 15 — Production build
+- [x] Phase 15 — Production build
+
+✅ **All 16 phases complete.** See [`docs/release-checklist.md`](./docs/release-checklist.md) for the production-readiness audit.
 
 ## License
 
