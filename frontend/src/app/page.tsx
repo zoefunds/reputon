@@ -5,13 +5,13 @@ import { HowItWorks } from "@/components/landing/HowItWorks";
 import { CTA } from "@/components/landing/CTA";
 
 export default function HomePage() {
-  return (
-    <>
-      <Hero />
-      <TrustStrip />
-      <FeatureGrid />
-      <HowItWorks />
-      <CTA />
-    </>
-  );
+ return (
+ <>
+ <Hero />
+ <TrustStrip />
+ <FeatureGrid />
+ <HowItWorks />
+ <CTA />
+ </>
+ );
 }
