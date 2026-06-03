@@ -18,9 +18,11 @@ import { z } from "zod";
 import { HTTPException } from "hono/http-exception";
 import crypto from "node:crypto";
 import { apiAuth } from "../../middleware/apiAuth";
+import { rateLimit } from "../../middleware/rateLimit";
 import { reputon, isContractConfigured } from "../../services/genlayer";
 import { memo } from "../../services/cache";
 import { enqueueEvaluation, getJob, emit } from "../../services/jobs";
+import { SCOPES } from "../../lib/scopes";
 
 const app = new Hono();
 
@@ -94,7 +96,12 @@ app.get("/endorsements", async (c) => {
 
 // ----- writes ----------------------------------------------------------
 
-app.post("/evaluate", apiAuth({ required: true, scope: "write:evaluate" }), async (c) => {
+// Writes are sharply rate-limited per-key: 10/min by default.
+app.post(
+  "/evaluate",
+  apiAuth({ required: true, scope: SCOPES.WRITE_EVALUATE }),
+  rateLimit({ windowSec: 60, max: 10, anonMax: 0, prefix: "rl:evaluate" }),
+  async (c) => {
   ensureContract();
   const body = evaluateBody.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) throw new HTTPException(400, { message: "Invalid body" });
@@ -111,7 +118,8 @@ app.post("/evaluate", apiAuth({ required: true, scope: "write:evaluate" }), asyn
     queued_at: job.createdAt.toISOString(),
   }).catch(() => {});
   return c.json({ job_id: job.id, status: job.status, address: job.address }, 202);
-});
+  }
+);
 
 app.get("/evaluate/:id", apiAuth({ required: true }), async (c) => {
   const job = await getJob(c.req.param("id"));

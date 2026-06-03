@@ -7,6 +7,7 @@ import { env } from "./env";
 import { errorHandler } from "./middleware/error";
 import { rateLimit } from "./middleware/rateLimit";
 import { apiAuth } from "./middleware/apiAuth";
+import { bodyLimit } from "./middleware/bodyLimit";
 import health from "./routes/health";
 import profiles from "./routes/profiles";
 import onchain from "./routes/onchain";
@@ -30,6 +31,7 @@ app.use(
   })
 );
 app.use("*", errorHandler);
+app.use("*", bodyLimit(256 * 1024));
 // Caller resolution before rate-limit so the limiter can key by API key.
 app.use("/v1/*", apiAuth());
 app.use("/v1/*", rateLimit());

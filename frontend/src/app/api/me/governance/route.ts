@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/server/user";
 import { fetchSnapshotActivity, persistActivity } from "@/lib/server/governance";
+import { sameOrigin } from "@/lib/server/csrf";
 
 export async function GET() {
   const u = await getCurrentUser();

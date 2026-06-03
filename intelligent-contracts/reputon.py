@@ -1,17 +1,5 @@
-# =====================================================================
-# Reputon — Universal On-Chain Reputation Contract
-# ---------------------------------------------------------------------
-# Deploy on Genlayer Studio:  https://studio.genlayer.com/
-#
-# Responsibilities:
-#   - Register & maintain wallet reputation profiles
-#   - Compute reputation scores via Genlayer LLMs (equivalence principle)
-#   - Store an append-only score history with AI explanations
-#   - Track on-chain endorsements between wallets
-#   - Expose read methods that backend / dApps query directly
-#
-# SDK: genlayer-py (compatible with Studio CLI v0.39.x and on-chain runner)
-# =====================================================================
+# v0.2.17
+# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
 from genlayer import *
 from dataclasses import dataclass

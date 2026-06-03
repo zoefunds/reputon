@@ -15,6 +15,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@reputon/db/client";
 import { apiKeys } from "@reputon/db/schema";
 import { auth } from "@/lib/auth";
+import { sameOrigin } from "@/lib/server/csrf";
 
 const db = getDb();
 
@@ -55,6 +56,7 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
+  if (!sameOrigin(req)) return NextResponse.json({ error: { message: "csrf check failed" } }, { status: 403 });
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: { message: "unauthorized" } }, { status: 401 });

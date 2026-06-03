@@ -5,6 +5,7 @@ import { getDb } from "@reputon/db/client";
 import { evaluationJobs } from "@reputon/db/schema";
 import { getCurrentUser } from "@/lib/server/user";
 import { buildBundle, type SignalInputs } from "@/lib/server/signals";
+import { sameOrigin } from "@/lib/server/csrf";
 
 const db = getDb();
 
@@ -17,6 +18,7 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
+  if (!sameOrigin(req)) return NextResponse.json({ error: { message: "csrf check failed" } }, { status: 403 });
   const u = await getCurrentUser();
   if (!u) return NextResponse.json({ error: { message: "unauthorized" } }, { status: 401 });
   if (!u.primaryWallet?.address) {

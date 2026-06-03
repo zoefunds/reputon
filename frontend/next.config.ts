@@ -8,16 +8,71 @@ import { existsSync } from "node:fs";
 const rootEnv = resolve(process.cwd(), "..", ".env");
 if (existsSync(rootEnv)) loadEnv({ path: rootEnv });
 
+const isProd = process.env.NODE_ENV === "production";
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4001";
+const GENLAYER_RPC =
+  process.env.NEXT_PUBLIC_GENLAYER_RPC_URL ?? "https://studio.genlayer.com/api";
+
+const CONNECT_SRC = [
+  "'self'",
+  API_BASE,
+  GENLAYER_RPC,
+  "https://api.github.com",
+  "https://hub.snapshot.org",
+  "https://*.googleusercontent.com",
+  "https://accounts.google.com",
+  // Wallet RPCs sometimes spawned by injected wallets; keep https: broad.
+  isProd ? "" : "ws://localhost:3000",
+  isProd ? "" : "http://localhost:*",
+]
+  .filter(Boolean)
+  .join(" ");
+
+// In dev, Next needs 'unsafe-eval' for HMR; in prod we keep it strict.
+const SCRIPT_SRC = isProd
+  ? "'self' 'unsafe-inline'"
+  : "'self' 'unsafe-eval' 'unsafe-inline'";
+
+const CSP = [
+  `default-src 'self'`,
+  `script-src ${SCRIPT_SRC}`,
+  `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
+  `img-src 'self' data: https:`,
+  `font-src 'self' data: https://fonts.gstatic.com`,
+  `connect-src ${CONNECT_SRC}`,
+  `frame-ancestors 'none'`,
+  `base-uri 'self'`,
+  `form-action 'self'`,
+  `object-src 'none'`,
+  isProd ? "upgrade-insecure-requests" : "",
+]
+  .filter(Boolean)
+  .join("; ");
+
+const SECURITY_HEADERS = [
+  { key: "Content-Security-Policy", value: CSP },
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+];
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "**" },
-    ],
+    remotePatterns: [{ protocol: "https", hostname: "**" }],
   },
-  experimental: {
-    typedRoutes: false,
+  experimental: { typedRoutes: false },
+  async headers() {
+    return [
+      { source: "/:path*", headers: SECURITY_HEADERS },
+    ];
   },
 };
 

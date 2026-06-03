@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/server/user";
 import { writeNft, hasSigner } from "@/lib/server/genlayer";
+import { sameOrigin } from "@/lib/server/csrf";
 
 const Body = z.object({
   tier: z.enum(["genesis", "bronze", "silver", "gold", "eternal"]).default("genesis"),
@@ -15,6 +16,7 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
+  if (!sameOrigin(req)) return NextResponse.json({ error: { message: "csrf check failed" } }, { status: 403 });
   const u = await getCurrentUser();
   if (!u) return NextResponse.json({ error: { message: "unauthorized" } }, { status: 401 });
   if (!u.primaryWallet?.address) {
