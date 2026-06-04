@@ -406,14 +406,21 @@ export function Analyzer() {
  <p className="text-[12.5px] text-error">{job.error}</p>
  )}
  {job.status === "done" && (
- <p className="flex items-center gap-1 text-[13px] text-success">
- <CheckCircle2 className="h-4 w-4" />
- Score is updated on-chain. Head back to{" "}
- <a className="underline underline-offset-4" href="/dashboard">
- your dashboard
- </a>
- .
+ <div className="space-y-1.5">
+ <p className="flex items-start gap-1.5 text-[13px] text-success">
+ <CheckCircle2 className="mt-[1px] h-4 w-4 shrink-0" />
+ <span>
+ Transaction submitted to GenLayer.{" "}
+ <span className="text-foreground">Wait for the consensus result</span>
+ {" "}— finalization typically takes 1–5 minutes.
+ </span>
  </p>
+ <p className="pl-[22px] text-[12px] text-accent">
+ Your score won&apos;t appear on the{" "}
+ <a className="underline underline-offset-4 hover:text-foreground" href="/dashboard">dashboard</a>
+ {" "}until validators finish reaching consensus. No action needed — refresh once that finishes.
+ </p>
+ </div>
  )}
  <p className="text-[11px] text-accent">
  Attempts: {job.attempts}. Last update{" "}

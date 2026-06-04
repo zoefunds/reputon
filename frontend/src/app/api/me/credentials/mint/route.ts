@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/server/user";
-import { writeNft, hasSigner } from "@/lib/server/genlayer";
+import { writeNft, hasSigner, addr } from "@/lib/server/genlayer";
 import { sameOrigin } from "@/lib/server/csrf";
 
 const Body = z.object({
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
  try {
  // Owner-only `mint(to, name, desc, image_uri, tier, metadata_json, transferable)`
  const txHash = await writeNft("mint", [
- u.primaryWallet.address,
+ addr(u.primaryWallet.address),
  name,
  description,
  image_uri,
