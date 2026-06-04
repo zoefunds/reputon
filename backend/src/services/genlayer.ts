@@ -10,11 +10,56 @@
  * client is read-only.
  */
 
-import { createClient, createAccount } from "genlayer-js";
+import { createClient, createAccount, abi } from "genlayer-js";
 import { studionet, testnetAsimov, localnet } from "genlayer-js/chains";
 import { env } from "../env";
 
 type Hex = `0x${string}`;
+
+// ---------------------------------------------------------------------------
+// CalldataAddress wrapper
+// ---------------------------------------------------------------------------
+// genlayer-js's calldata encoder serializes plain hex strings as `string`,
+// not as `address`. Reads / writes that expect an `Address` then fail with
+// "GenLayer RPC error (gen_call): execution failed". The package does NOT
+// re-export the `CalldataAddress` class on its public surface (only "." is
+// exposed via `exports`), but the decoder uses it internally, so we can
+// round-trip a sentinel encoding to grab the real constructor at runtime.
+// SPECIAL_ADDR opcode = (3 << 3) | TYPE_SPECIAL(0) = 24.
+const _SPECIAL_ADDR = 24;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _probe = (abi as any).calldata.decode(
+  new Uint8Array([_SPECIAL_ADDR, ...new Array(20).fill(0)])
+);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CalldataAddressCtor: any = _probe?.constructor;
+
+function _hexToBytes20(hex: string): Uint8Array {
+  const h = (hex.startsWith("0x") ? hex.slice(2) : hex).padStart(40, "0");
+  if (h.length !== 40) throw new Error(`bad address length: ${hex}`);
+  const out = new Uint8Array(20);
+  for (let i = 0; i < 20; i++) out[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+
+/**
+ * Wrap a hex address string as a CalldataAddress so genlayer-js encodes it
+ * with the SPECIAL_ADDR opcode instead of as a plain string. Pass-through
+ * if the value is already wrapped.
+ */
+export function addr(value: string | unknown): unknown {
+  if (value && typeof value === "object" && CalldataAddressCtor && value instanceof CalldataAddressCtor) {
+    return value;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`addr() expected hex string, got ${typeof value}`);
+  }
+  if (!CalldataAddressCtor) {
+    // Fallback — should never happen but degrades gracefully.
+    return value;
+  }
+  return new CalldataAddressCtor(_hexToBytes20(value));
+}
 
 const ADDR = {
   reputon: (process.env.NEXT_PUBLIC_REPUTON_CONTRACT_ADDRESS ?? "") as Hex,
@@ -174,17 +219,17 @@ export type OnchainEndorsement = {
 
 export const reputon = {
   contractInfo: () => readAt<ContractInfo>(reputonAddress(), "get_contract_info"),
-  hasProfile: (addr: string) => readAt<boolean>(reputonAddress(), "has_profile", [addr]),
-  profile: (addr: string) => readAt<OnchainProfile>(reputonAddress(), "get_profile", [addr]),
-  score: (addr: string) => readAt<OnchainScore>(reputonAddress(), "get_score", [addr]),
-  verifyScore: (addr: string, expected: number) =>
-    readAt<boolean>(reputonAddress(), "verify_score", [addr, expected]),
-  history: (addr: string, limit = 20) =>
-    readAt<OnchainHistoryEntry[]>(reputonAddress(), "get_history", [addr, limit]),
-  endorsementsGiven: (addr: string) =>
-    readAt<OnchainEndorsement[]>(reputonAddress(), "get_endorsements_given", [addr]),
-  endorsementsReceived: (addr: string) =>
-    readAt<OnchainEndorsement[]>(reputonAddress(), "get_endorsements_received", [addr]),
+  hasProfile: (a: string) => readAt<boolean>(reputonAddress(), "has_profile", [addr(a)]),
+  profile: (a: string) => readAt<OnchainProfile>(reputonAddress(), "get_profile", [addr(a)]),
+  score: (a: string) => readAt<OnchainScore>(reputonAddress(), "get_score", [addr(a)]),
+  verifyScore: (a: string, expected: number) =>
+    readAt<boolean>(reputonAddress(), "verify_score", [addr(a), expected]),
+  history: (a: string, limit = 20) =>
+    readAt<OnchainHistoryEntry[]>(reputonAddress(), "get_history", [addr(a), limit]),
+  endorsementsGiven: (a: string) =>
+    readAt<OnchainEndorsement[]>(reputonAddress(), "get_endorsements_given", [addr(a)]),
+  endorsementsReceived: (a: string) =>
+    readAt<OnchainEndorsement[]>(reputonAddress(), "get_endorsements_received", [addr(a)]),
 };
 
 // =========================================================================
@@ -222,14 +267,14 @@ export const reputonNft = {
   totalSupply: () => readAt<number>(reputonNftAddress(), "total_supply"),
   credential: (tokenId: number) =>
     readAt<Credential>(reputonNftAddress(), "get_credential", [tokenId]),
-  credentialsOf: (addr: string) =>
-    readAt<Credential[]>(reputonNftAddress(), "get_credentials_of", [addr]),
-  hasCredential: (addr: string, tier: string) =>
-    readAt<boolean>(reputonNftAddress(), "has_credential", [addr, tier]),
+  credentialsOf: (a: string) =>
+    readAt<Credential[]>(reputonNftAddress(), "get_credentials_of", [addr(a)]),
+  hasCredential: (a: string, tier: string) =>
+    readAt<boolean>(reputonNftAddress(), "has_credential", [addr(a), tier]),
   isSelfMintAllowed: (tier: string) =>
     readAt<boolean>(reputonNftAddress(), "is_self_mint_allowed", [tier]),
-  isAuthorizedMinter: (addr: string) =>
-    readAt<boolean>(reputonNftAddress(), "is_authorized_minter", [addr]),
+  isAuthorizedMinter: (a: string) =>
+    readAt<boolean>(reputonNftAddress(), "is_authorized_minter", [addr(a)]),
 };
 
 // =========================================================================
@@ -264,18 +309,18 @@ export type SybilFlag = {
 export const sybilOracle = {
   contractInfo: () =>
     readAt<SybilContractInfo>(sybilOracleAddress(), "get_contract_info"),
-  flags: (addr: string) =>
-    readAt<SybilFlag[]>(sybilOracleAddress(), "get_flags", [addr]),
-  activeFlags: (addr: string) =>
-    readAt<SybilFlag[]>(sybilOracleAddress(), "get_active_flags", [addr]),
-  severity: (addr: string) =>
-    readAt<string>(sybilOracleAddress(), "get_severity", [addr]),
-  isSuspicious: (addr: string, min: Severity = "medium") =>
-    readAt<boolean>(sybilOracleAddress(), "is_suspicious", [addr, min]),
+  flags: (a: string) =>
+    readAt<SybilFlag[]>(sybilOracleAddress(), "get_flags", [addr(a)]),
+  activeFlags: (a: string) =>
+    readAt<SybilFlag[]>(sybilOracleAddress(), "get_active_flags", [addr(a)]),
+  severity: (a: string) =>
+    readAt<string>(sybilOracleAddress(), "get_severity", [addr(a)]),
+  isSuspicious: (a: string, min: Severity = "medium") =>
+    readAt<boolean>(sybilOracleAddress(), "is_suspicious", [addr(a), min]),
   listFlagged: (limit = 50) =>
     readAt<string[]>(sybilOracleAddress(), "list_flagged_addresses", [limit]),
-  isAuthorizedReporter: (addr: string) =>
-    readAt<boolean>(sybilOracleAddress(), "is_authorized_reporter", [addr]),
+  isAuthorizedReporter: (a: string) =>
+    readAt<boolean>(sybilOracleAddress(), "is_authorized_reporter", [addr(a)]),
 };
 
 export const __env__ = { ADDR, env };

@@ -10,7 +10,7 @@
 import { and, eq, lt, desc } from "drizzle-orm";
 import { db, schema } from "./db";
 import { fanout } from "./webhooks";
-import { reputon, reputonAddress, writeReputon } from "./genlayer";
+import { addr, reputon, reputonAddress, writeReputon } from "./genlayer";
 
 export type JobStatus = "queued" | "running" | "done" | "failed";
 
@@ -95,7 +95,7 @@ async function runJob(job: typeof schema.evaluationJobs.$inferSelect) {
   }
 
   const signalsJson = JSON.stringify(job.signals ?? {});
-  const txHash = await writeReputon("evaluate_and_update", [job.address, signalsJson]);
+  const txHash = await writeReputon("evaluate_and_update", [addr(job.address), signalsJson]);
 
   await db
     .update(schema.evaluationJobs)
