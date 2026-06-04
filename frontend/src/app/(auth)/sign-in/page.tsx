@@ -3,9 +3,6 @@ import Link from "next/link";
 import { Container } from "@/components/ui/container";
 import { Logo } from "@/components/common/Logo";
 import { WalletSignIn } from "@/components/auth/WalletSignIn";
-import { OAuthButton } from "@/components/auth/OAuthButton";
-import { EmailSignIn } from "@/components/auth/EmailSignIn";
-import { enabledProviders } from "../../../../auth";
 
 export const metadata: Metadata = {
  title: "Sign in",
@@ -29,7 +26,8 @@ export default async function SignInPage({ searchParams }: Props) {
  Sign in to Reputon
  </h1>
  <p className="mt-2 text-[14px] text-accent">
- Continue with a wallet, Google, or your email.
+ Connect the wallet you want your reputation tied to. We&apos;ll
+ prompt you to switch to GenLayer Studionet right after.
  </p>
  </div>
 
@@ -41,27 +39,6 @@ export default async function SignInPage({ searchParams }: Props) {
 
  <div className="mt-8 space-y-3">
  <WalletSignIn callbackUrl={callbackUrl} />
-
- {(enabledProviders.google || enabledProviders.email) && (
- <div className="relative my-4">
- <div className="absolute inset-0 flex items-center">
- <div className="w-full border-t border-border/70" />
- </div>
- <div className="relative flex justify-center">
- <span className="bg-background px-3 text-[11px] uppercase tracking-[0.18em] text-accent">
- or
- </span>
- </div>
- </div>
- )}
-
- {enabledProviders.google && (
- <OAuthButton provider="google" callbackUrl={callbackUrl}>
- Continue with Google
- </OAuthButton>
- )}
-
- {enabledProviders.email && <EmailSignIn callbackUrl={callbackUrl} />}
  </div>
 
  <p className="mt-8 text-center text-[12px] text-accent">

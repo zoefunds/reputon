@@ -4,9 +4,9 @@ Three contracts on Genlayer StudioNet:
 
 | Contract            | Address                                       |
 | ------------------- | --------------------------------------------- |
-| `reputon.py`        | `0xD7975CeA5549459d6eF0913a9fd919d17DE3d911`  |
-| `reputon_nft.py`    | `0xEC90A80be181Cb2F839A855B2db73406FCbaF34d`  |
-| `sybil_oracle.py`   | `0x3E2cCF5a85217b00B5EFBC499922ec0EC5841408`  |
+| `reputon.py`        | `0x179DA7e9BA6265A76ba2C7c57ab6C2c4d12941E6`  |
+| `reputon_nft.py`    | `0x1E9EC43963b7BBD574a41AcF8e37163fCcA24a2F`  |
+| `sybil_oracle.py`   | `0x2ff462D033B22A77b6502D65ccE4DFa180D8865f`  |
 
 ---
 

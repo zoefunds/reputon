@@ -164,9 +164,9 @@ in `packages/db/migrations/`.
 
 | Contract            | Deployed (StudioNet) |
 | ------------------- | -------------------- |
-| `reputon.py`        | `0xD7975CeA…d911`    |
-| `reputon_nft.py`    | `0xEC90A80b…F34d`    |
-| `sybil_oracle.py`   | `0x3E2cCF5a…1408`    |
+| `reputon.py`        | `0x179DA7e9…41E6`    |
+| `reputon_nft.py`    | `0x1E9EC439…4a2F`    |
+| `sybil_oracle.py`   | `0x2ff462D0…865f`    |
 
 Surfaces detailed in [`contracts.md`](./contracts.md).
 

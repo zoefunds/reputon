@@ -80,7 +80,7 @@ Wallet sign-in (SIWE) works out of the box — no env config needed.
 | `NEXT_PUBLIC_GENLAYER_CHAIN_ID`         | `61999`                                          | studionet                               |
 | `GENLAYER_ACCOUNT_PRIVATE_KEY`          | unset                                            | Required for on-chain WRITES (eval, mint) |
 | `GENLAYER_ACCOUNT_ADDRESS`              | unset                                            | Informational                           |
-| `NEXT_PUBLIC_REPUTON_CONTRACT_ADDRESS`  | `0xD7975CeA…`                                    | Set by `set_contract_address.py reputon` |
+| `NEXT_PUBLIC_REPUTON_CONTRACT_ADDRESS`  | `0x179DA7e9…`                                    | Set by `set_contract_address.py reputon` |
 | `NEXT_PUBLIC_REPUTON_NFT_CONTRACT_ADDRESS` | `0xEC90A80b…`                                 | Set by `set_contract_address.py nft`    |
 | `NEXT_PUBLIC_SYBIL_ORACLE_CONTRACT_ADDRESS` | `0x3E2cCF5a…`                                | Set by `set_contract_address.py sybil`  |
 

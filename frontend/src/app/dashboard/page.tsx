@@ -187,8 +187,8 @@ export default async function DashboardOverview() {
                 icon={<Clock className="h-3.5 w-3.5" />}
                 label="On-chain age"
                 value={
-                  score?.last_evaluated_at
-                    ? formatYearsSince(score.last_evaluated_at)
+                  user.primaryWallet?.linkedAt
+                    ? formatYearsSinceIso(user.primaryWallet.linkedAt)
                     : "—"
                 }
               />
@@ -347,6 +347,18 @@ function formatYearsSince(unixSec: number): string {
   if (years < 0.083) return `${Math.max(1, Math.round(years * 365))} days`;
   if (years < 1) return `${Math.round(years * 12)} months`;
   return `${years.toFixed(1)} years`;
+}
+
+/**
+ * Same shape as formatYearsSince but takes an ISO timestamp. We use this
+ * for on-chain age, derived from when the user first linked their wallet
+ * here — the contract can't record a real on-chain created_at on this
+ * Genlayer SDK because gl.block.timestamp is not exposed.
+ */
+function formatYearsSinceIso(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "—";
+  return formatYearsSince(Math.floor(t / 1000));
 }
 
 function formatAgo(unixSec: number): string {

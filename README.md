@@ -16,9 +16,15 @@ Deployed contracts (Genlayer StudioNet, chain id `61999`):
 
 | Contract            | Purpose                          | Address                                       |
 | ------------------- | -------------------------------- | --------------------------------------------- |
-| `reputon.py`        | Profiles, scores, history, endorsements, AI evaluation | `0xD7975CeA5549459d6eF0913a9fd919d17DE3d911` |
-| `reputon_nft.py`    | Soulbound credential NFTs        | `0xEC90A80be181Cb2F839A855B2db73406FCbaF34d`  |
-| `sybil_oracle.py`   | LLM-backed sybil detection       | `0x3E2cCF5a85217b00B5EFBC499922ec0EC5841408`  |
+| `reputon.py`        | Profiles, scores, history, endorsements, AI evaluation | `0x179DA7e9BA6265A76ba2C7c57ab6C2c4d12941E6` |
+| `reputon_nft.py`    | Soulbound credential NFTs        | `0x1E9EC43963b7BBD574a41AcF8e37163fCcA24a2F`  |
+| `sybil_oracle.py`   | LLM-backed sybil detection       | `0x2ff462D033B22A77b6502D65ccE4DFa180D8865f`  |
+
+> **Signing model.** As of the latest release, **every on-chain write is
+> signed by the user's connected wallet** — never the protocol. `mint_self`
+> on the NFT contract and `evaluate_and_update` on the reputation contract
+> are both initiated client-side via RainbowKit + wagmi. The backend's
+> signer is reserved for admin operations and webhook fanout only.
 
 ---
 
@@ -68,10 +74,13 @@ production-grade security.
               +-----------------------+
               |  Reputon backend      |
               |  - assembles bundle   |
-              |  - queues job         |
+              |  - compacts to <4 KB  |
+              |  - opens job row      |
               +-----------+-----------+
                           |
-              2. backend writes to contract via genlayer-js
+              2. user signs evaluate_and_update from their own
+                 wallet via RainbowKit + wagmi. The tx hits
+                 GenLayer Studionet's consensus contract.
                           |
                           v
               +-----------------------+
@@ -81,8 +90,8 @@ production-grade security.
               |   .prompt_comparative |
               +-----------+-----------+
                           |
-              3. validators each run the LLM
-                 + must agree on category + score (within 25)
+              3. validators each run the LLM and must agree
+                 the output is JSON with a numeric score field
                           |
                           v
               +-----------------------+
@@ -92,12 +101,16 @@ production-grade security.
               |  breakdown, history   |
               +-----------+-----------+
                           |
-              4. backend emits webhooks; dashboard renders
+              4. backend poller sees the on-chain score advance,
+                 marks the job done, and fans `score.updated`
+                 webhooks out to subscribers
 ```
 
 Reads are always direct from the contract (or a 15-second Redis cache).
-Writes are queued and executed by the backend scheduler when a Genlayer
-signer key is configured.
+Writes are signed by the **user's own wallet** — there is no backend
+signer in the user path. Each on-chain action triggers exactly one
+wallet popup, and the wallet is auto-prompted to switch to GenLayer
+Studionet the moment a user connects.
 
 ## Architecture
 

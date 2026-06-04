@@ -17,13 +17,14 @@
  * approval flow).
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { signIn } from "next-auth/react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useAccount, useDisconnect, useSignMessage } from "wagmi";
+import { useAccount, useDisconnect, useSignMessage, useSwitchChain } from "wagmi";
 import { SiweMessage } from "siwe";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { GENLAYER_CHAIN } from "@/lib/wagmi";
 
 function humanise(raw: string): string {
   const e = raw.toLowerCase();
@@ -43,9 +44,13 @@ export function WalletSignIn({ callbackUrl }: { callbackUrl: string }) {
   const { address, isConnected, chainId } = useAccount();
   const { disconnect } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
+  const { switchChainAsync } = useSwitchChain();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoTried, setAutoTried] = useState(false);
+  // Track per-connection-session whether we've already nudged the wallet to
+  // switch to GenLayer Studionet. Don't re-prompt every re-render.
+  const switchedFor = useRef<string | null>(null);
 
   const handleSignIn = useCallback(async () => {
     if (!address) return;
@@ -89,6 +94,21 @@ export function WalletSignIn({ callbackUrl }: { callbackUrl: string }) {
       setBusy(false);
     }
   }, [address, chainId, signMessageAsync, callbackUrl]);
+
+  // The instant a wallet connects, prompt it to add + switch to GenLayer
+  // Studionet so every subsequent action (mint, evaluate) lands on the
+  // right chain. We only nudge once per connected address to avoid a
+  // popup loop if the user dismisses.
+  useEffect(() => {
+    if (!isConnected || !address) return;
+    if (chainId === GENLAYER_CHAIN.id) return;
+    if (switchedFor.current === address) return;
+    switchedFor.current = address;
+    void switchChainAsync({ chainId: GENLAYER_CHAIN.id }).catch(() => {
+      // User dismissed — we'll re-prompt at the moment they actually try
+      // to sign an on-chain action (via useGenLayerWrite).
+    });
+  }, [isConnected, address, chainId, switchChainAsync]);
 
   // Auto-trigger sign-in once a wallet is connected (one-shot).
   useEffect(() => {
