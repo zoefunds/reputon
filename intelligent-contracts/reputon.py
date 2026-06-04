@@ -186,8 +186,28 @@ class Contract(gl.Contract):
         The LLM call runs under the Genlayer equivalence principle so every
         validator independently re-derives a comparable score.
         """
-        if target not in self.profiles:
-            raise Exception("profile not found")
+        # Coerce target to an Address instance. Genlayer's RPC passes method
+        # args as raw strings; TreeMap reads coerce silently but TreeMap
+        # writes call `.as_bytes` on the key and would otherwise raise
+        # AttributeError on a plain str.
+        target_addr = target if hasattr(target, "as_bytes") else Address(target)
+
+        # Auto-register a stub profile for `target_addr` on first evaluation,
+        # so an external service (the Reputon backend) can score any wallet
+        # without requiring the wallet owner to send a separate
+        # register_profile tx first.
+        if target_addr not in self.profiles:
+            self.profiles[target_addr] = Profile(
+                display_name="",
+                bio="",
+                score=u256(0),
+                confidence=u256(0),
+                category=CATEGORY_UNVERIFIED,
+                last_evaluated_at=u256(0),
+                created_at=u256(0),
+                exists=True,
+            )
+            self.total_profiles = u256(self.total_profiles + 1)
         if len(signals_json) > MAX_SIGNALS_LEN:
             raise Exception("signals payload too large")
 
@@ -246,7 +266,7 @@ class Contract(gl.Contract):
         explanation = str(decoded.get("explanation", ""))[:MAX_EXPLANATION_LEN]
 
         # Compute delta vs previous score
-        prev = self.profiles[target]
+        prev = self.profiles[target_addr]
         prev_score = int(prev.score)
         if score >= prev_score:
             delta_abs = u256(score - prev_score)
@@ -262,12 +282,12 @@ class Contract(gl.Contract):
         prev.confidence = u256(confidence)
         prev.category = category
         prev.last_evaluated_at = now
-        self.profiles[target] = prev
+        self.profiles[target_addr] = prev
 
         # Append to history (rolling cap)
-        if target not in self.history:
-            self.history[target] = DynArray[ScoreEntry]()
-        entries = self.history[target]
+        if target_addr not in self.history:
+            self.history[target_addr] = DynArray[ScoreEntry]()
+        entries = self.history[target_addr]
         entries.append(ScoreEntry(
             score=u256(score),
             confidence=u256(confidence),
@@ -285,13 +305,13 @@ class Contract(gl.Contract):
         # Trim head if exceeded cap
         while len(entries) > MAX_HISTORY:
             entries.pop(0)
-        self.history[target] = entries
+        self.history[target_addr] = entries
 
         # Counters
         prev_count = u256(0)
-        if target in self.eval_count:
-            prev_count = self.eval_count[target]
-        self.eval_count[target] = u256(prev_count + 1)
+        if target_addr in self.eval_count:
+            prev_count = self.eval_count[target_addr]
+        self.eval_count[target_addr] = u256(prev_count + 1)
         self.total_evaluations = u256(self.total_evaluations + 1)
 
     # =================================================================
