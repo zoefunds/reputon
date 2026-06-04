@@ -12,8 +12,13 @@ import {
  AlertTriangle,
  PlayCircle,
 } from "lucide-react";
+import { useAccount } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { TrustBadge } from "@/components/dashboard/TrustBadge";
+import { useGenLayerWrite } from "@/lib/genlayer/useGenLayerWrite";
+import { addr } from "@/lib/genlayer/clientWrite";
+
+const REPUTON_ADDRESS = (process.env.NEXT_PUBLIC_REPUTON_CONTRACT_ADDRESS ?? "") as `0x${string}`;
 
 type Governance = {
  dao: string;
@@ -63,6 +68,11 @@ export function Analyzer() {
  const [job, setJob] = useState<Job | null>(null);
  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+ // User-signed write hook. Evaluate now goes through the connected
+ // wallet, not the backend signer.
+ const { address: connectedAddress, isConnected } = useAccount();
+ const { write: writeOnchain, status: writeStatus, error: writeError } = useGenLayerWrite();
+
  useEffect(
  () => () => {
  if (pollRef.current) clearInterval(pollRef.current);
@@ -100,6 +110,17 @@ export function Analyzer() {
  setEvalBusy(true);
  setJob(null);
  try {
+ if (!isConnected || !connectedAddress) {
+  throw new Error("Connect a wallet to evaluate.");
+ }
+ if (!REPUTON_ADDRESS) {
+  throw new Error("Reputon contract address not configured.");
+ }
+
+ // 1. Ask the backend to assemble + compact the signals bundle and
+ //    open a job row. Backend no longer submits on-chain — it just
+ //    records the request, waits for the tx hash, then polls the
+ //    consensus result.
  const res = await fetch("/api/me/evaluate", {
  method: "POST",
  headers: { "Content-Type": "application/json" },
@@ -115,14 +136,20 @@ export function Analyzer() {
  job_id?: string;
  status?: Job["status"];
  bundle?: Bundle;
+ signals_json?: string;
+ target_address?: string;
  error?: { message?: string };
  };
  if (!res.ok) throw new Error(body.error?.message ?? "Queue failed");
  if (body.bundle) setBundle(body.bundle);
+
+ const target = body.target_address ?? connectedAddress;
+ const signalsJson = body.signals_json ?? JSON.stringify(body.bundle ?? {});
+
  const initial: Job = {
  id: body.job_id ?? "",
  status: body.status ?? "queued",
- address: bundle?.address ?? "",
+ address: target,
  onchainTxHash: null,
  error: null,
  attempts: 0,
@@ -130,9 +157,32 @@ export function Analyzer() {
  updatedAt: new Date().toISOString(),
  };
  setJob(initial);
- startPolling(initial.id);
+
+ // 2. Sign + submit the on-chain evaluate from the user's wallet.
+ const result = await writeOnchain({
+  contractAddress: REPUTON_ADDRESS,
+  functionName: "evaluate_and_update",
+  args: [addr(target), signalsJson],
+ });
+
+ // 3. Tell the backend about the tx hash so it can watch for finalization
+ //    and fan out webhooks once consensus reaches it.
+ if (initial.id && result.evmTxHash) {
+  try {
+   await fetch(`/api/me/evaluate?id=${initial.id}`, {
+   method: "PATCH",
+   headers: { "Content-Type": "application/json" },
+   body: JSON.stringify({ tx_hash: result.evmTxHash }),
+   });
+  } catch {
+   /* non-fatal — the user already has the tx hash visible */
+  }
+ }
+
+ setJob((j) => (j ? { ...j, onchainTxHash: result.evmTxHash, status: "running" } : j));
+ if (initial.id) startPolling(initial.id);
  } catch (e) {
- setError(e instanceof Error ? e.message : "Queue failed");
+ setError(e instanceof Error ? e.message : writeError ?? "Queue failed");
  } finally {
  setEvalBusy(false);
  }
@@ -351,10 +401,21 @@ export function Analyzer() {
  {previewBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
  Preview bundle
  </Button>
- <Button onClick={runEvaluation} disabled={evalBusy}>
+ <Button onClick={runEvaluation} disabled={evalBusy || !isConnected}>
  {evalBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
- Run evaluation
+ {writeStatus === "switching"
+  ? "Switching to GenLayer…"
+  : writeStatus === "signing"
+  ? "Confirm in wallet…"
+  : writeStatus === "mining"
+  ? "Awaiting consensus…"
+  : "Run evaluation"}
  </Button>
+ {!isConnected && (
+  <p className="text-[12px] text-accent">
+   Connect a wallet to evaluate.
+  </p>
+ )}
  {error && (
  <p className="flex items-center gap-1 text-[13px] text-error">
  <AlertTriangle className="h-3.5 w-3.5" /> {error}
