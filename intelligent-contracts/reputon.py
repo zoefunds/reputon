@@ -68,6 +68,12 @@ class Profile:
     last_evaluated_at: u256
     created_at: u256
     exists: bool
+    # JSON-encoded score history (newest entries appended, oldest trimmed
+    # past MAX_HISTORY). Stored on Profile rather than as a nested
+    # TreeMap[Address, DynArray[ScoreEntry]] because Genlayer storage
+    # rejects user-instantiated nested collections.
+    history_json: str
+    eval_count: u256
 
 
 @allow_storage
@@ -113,8 +119,7 @@ class Contract(gl.Contract):
 
     # --- mappings ---
     profiles: TreeMap[Address, Profile]
-    history: TreeMap[Address, DynArray[ScoreEntry]]
-    eval_count: TreeMap[Address, u256]
+    # history + eval_count are stored on Profile (history_json + eval_count fields)
 
     endorsements_given_keys: TreeMap[Address, DynArray[Address]]
     endorsements_received_keys: TreeMap[Address, DynArray[Address]]
@@ -155,6 +160,8 @@ class Contract(gl.Contract):
             last_evaluated_at=u256(0),
             created_at=now,
             exists=True,
+            history_json="[]",
+            eval_count=u256(0),
         )
         self.total_profiles = u256(self.total_profiles + 1)
 
@@ -206,6 +213,8 @@ class Contract(gl.Contract):
                 last_evaluated_at=u256(0),
                 created_at=u256(0),
                 exists=True,
+                history_json="[]",
+                eval_count=u256(0),
             )
             self.total_profiles = u256(self.total_profiles + 1)
         if len(signals_json) > MAX_SIGNALS_LEN:
@@ -311,40 +320,46 @@ class Contract(gl.Contract):
 
         now = u256(0)
 
-        # Update profile snapshot
+        # Build the history entry as a plain dict and prepend it to the
+        # JSON-encoded history string on the Profile. We store history this
+        # way (instead of a nested TreeMap[Address, DynArray[ScoreEntry]])
+        # because Genlayer storage rejects user-instantiated nested
+        # collections.
+        try:
+            history_list = json.loads(prev.history_json) if prev.history_json else []
+            if not isinstance(history_list, list):
+                history_list = []
+        except Exception:
+            history_list = []
+
+        history_list.insert(0, {
+            "score": score,
+            "confidence": confidence,
+            "category": category,
+            "delta": -delta_abs if delta_neg else delta_abs,
+            "reason": "evaluate_and_update",
+            "explanation": explanation,
+            "breakdown": {
+                "activity": activity,
+                "governance": governance,
+                "contribution": contribution,
+                "trust": trust,
+            },
+            "created_at": int(now),
+        })
+        # Trim to most-recent MAX_HISTORY entries
+        history_list = history_list[:MAX_HISTORY]
+
+        # Update profile snapshot (single TreeMap setitem call, which we've
+        # already proven works for scalar/dataclass values).
         prev.score = u256(score)
         prev.confidence = u256(confidence)
         prev.category = category
         prev.last_evaluated_at = now
+        prev.history_json = json.dumps(history_list)
+        prev.eval_count = u256(int(prev.eval_count) + 1)
         self.profiles[target_addr] = prev
 
-        # Append to history (rolling cap). Genlayer storage auto-creates the
-        # DynArray on first access; user code MUST NOT call DynArray[T]()
-        # directly. Mutations on the returned reference persist in storage,
-        # so no need to re-assign at the end.
-        entries = self.history[target_addr]
-        entries.append(ScoreEntry(
-            score=u256(score),
-            confidence=u256(confidence),
-            category=category,
-            delta_abs=delta_abs,
-            delta_negative=delta_neg,
-            reason="evaluate_and_update",
-            explanation=explanation,
-            activity=u256(activity),
-            governance=u256(governance),
-            contribution=u256(contribution),
-            trust=u256(trust),
-            created_at=now,
-        ))
-        while len(entries) > MAX_HISTORY:
-            entries.pop(0)
-
-        # Counters
-        prev_count = u256(0)
-        if target_addr in self.eval_count:
-            prev_count = self.eval_count[target_addr]
-        self.eval_count[target_addr] = u256(prev_count + 1)
         self.total_evaluations = u256(self.total_evaluations + 1)
 
     # =================================================================
@@ -440,7 +455,7 @@ class Contract(gl.Contract):
             "category": p.category,
             "last_evaluated_at": int(p.last_evaluated_at),
             "created_at": int(p.created_at),
-            "evaluations": int(self.eval_count[addr]) if addr in self.eval_count else 0,
+            "evaluations": int(p.eval_count),
         }
 
     @gl.public.view
@@ -465,33 +480,19 @@ class Contract(gl.Contract):
 
     @gl.public.view
     def get_history(self, addr: Address, limit: int) -> list:
-        if addr not in self.history:
+        if addr not in self.profiles:
+            return []
+        p = self.profiles[addr]
+        if not p.history_json:
+            return []
+        try:
+            entries = json.loads(p.history_json)
+        except Exception:
+            return []
+        if not isinstance(entries, list):
             return []
         n = _clamp(int(limit), 1, MAX_HISTORY)
-        entries = self.history[addr]
-        out: list = []
-        count = len(entries)
-        start = 0 if count <= n else count - n
-        i = count - 1
-        while i >= start:
-            e = entries[i]
-            out.append({
-                "score": int(e.score),
-                "confidence": int(e.confidence),
-                "category": e.category,
-                "delta": -int(e.delta_abs) if e.delta_negative else int(e.delta_abs),
-                "reason": e.reason,
-                "explanation": e.explanation,
-                "breakdown": {
-                    "activity": int(e.activity),
-                    "governance": int(e.governance),
-                    "contribution": int(e.contribution),
-                    "trust": int(e.trust),
-                },
-                "created_at": int(e.created_at),
-            })
-            i -= 1
-        return out
+        return entries[:n]
 
     @gl.public.view
     def get_endorsements_given(self, addr: Address) -> list:
