@@ -95,7 +95,9 @@ export default async function NftsPage() {
  <p className="mt-1 text-[13px] text-accent">{c.description}</p>
  )}
  <p className="mt-3 text-[11px] text-accent">
- Minted {new Date(c.minted_at * 1000).toLocaleDateString()}
+ {c.minted_at && c.minted_at > 0
+   ? `Minted ${new Date(c.minted_at * 1000).toLocaleDateString()}`
+   : "Soulbound · on-chain"}
  </p>
  </div>
  </article>
