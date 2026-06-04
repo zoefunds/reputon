@@ -207,8 +207,7 @@ class Contract(gl.Contract):
         )
         self.credentials[token_id] = cred
 
-        if to not in self.tokens_of:
-            self.tokens_of[to] = DynArray[u256]()
+        # Genlayer storage auto-creates DynArray on first access.
         self.tokens_of[to].append(token_id)
 
         self.next_token_id = u256(token_id + 1)
@@ -268,8 +267,6 @@ class Contract(gl.Contract):
                 i += 1
             self.tokens_of[old_owner] = arr
 
-        if to not in self.tokens_of:
-            self.tokens_of[to] = DynArray[u256]()
         self.tokens_of[to].append(tid)
 
     # =================================================================

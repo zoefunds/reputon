@@ -250,8 +250,7 @@ class Contract(gl.Contract):
         reporter: Address,
         automated: bool,
     ) -> None:
-        if target not in self.flags:
-            self.flags[target] = DynArray[SybilFlag]()
+        # Genlayer storage auto-creates DynArray on first access.
         flag = SybilFlag(
             severity=severity,
             reason=reason,

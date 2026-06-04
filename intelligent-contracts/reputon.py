@@ -318,9 +318,10 @@ class Contract(gl.Contract):
         prev.last_evaluated_at = now
         self.profiles[target_addr] = prev
 
-        # Append to history (rolling cap)
-        if target_addr not in self.history:
-            self.history[target_addr] = DynArray[ScoreEntry]()
+        # Append to history (rolling cap). Genlayer storage auto-creates the
+        # DynArray on first access; user code MUST NOT call DynArray[T]()
+        # directly. Mutations on the returned reference persist in storage,
+        # so no need to re-assign at the end.
         entries = self.history[target_addr]
         entries.append(ScoreEntry(
             score=u256(score),
@@ -336,10 +337,8 @@ class Contract(gl.Contract):
             trust=u256(trust),
             created_at=now,
         ))
-        # Trim head if exceeded cap
         while len(entries) > MAX_HISTORY:
             entries.pop(0)
-        self.history[target_addr] = entries
 
         # Counters
         prev_count = u256(0)
@@ -356,48 +355,41 @@ class Contract(gl.Contract):
     def add_endorsement(self, target: Address, weight: int, note: str) -> None:
         """Caller endorses `target`. Repeated calls overwrite the prior entry."""
         sender = gl.message.sender_address
-        if sender == target:
+        target_addr = target if hasattr(target, "as_bytes") else Address(target)
+        if sender == target_addr:
             raise Exception("cannot endorse self")
         if sender not in self.profiles:
             raise Exception("endorser has no profile")
-        if target not in self.profiles:
+        if target_addr not in self.profiles:
             raise Exception("target has no profile")
 
         w = _clamp(int(weight), 1, MAX_ENDORSEMENT_WEIGHT)
         note = note[:MAX_NOTE_LEN]
         now = u256(0)
 
-        # Initialize per-sender map
-        if sender not in self.endorsements:
-            self.endorsements[sender] = TreeMap[Address, EndorsementRecord]()
-            self.endorsements_given_keys[sender] = DynArray[Address]()
-        if target not in self.endorsements_received_keys:
-            self.endorsements_received_keys[target] = DynArray[Address]()
-
+        # Genlayer storage auto-creates nested TreeMaps and DynArrays on
+        # access. Do NOT instantiate them in user code.
         sender_map = self.endorsements[sender]
 
-        if target in sender_map:
-            # update existing
-            rec = sender_map[target]
+        if target_addr in sender_map:
+            rec = sender_map[target_addr]
             rec.weight = u256(w)
             rec.note = note
             rec.revoked = False
-            sender_map[target] = rec
+            sender_map[target_addr] = rec
         else:
-            sender_map[target] = EndorsementRecord(
+            sender_map[target_addr] = EndorsementRecord(
                 from_addr=sender,
-                to_addr=target,
+                to_addr=target_addr,
                 weight=u256(w),
                 note=note,
                 created_at=now,
                 revoked_at=u256(0),
                 revoked=False,
             )
-            self.endorsements_given_keys[sender].append(target)
-            self.endorsements_received_keys[target].append(sender)
+            self.endorsements_given_keys[sender].append(target_addr)
+            self.endorsements_received_keys[target_addr].append(sender)
             self.total_endorsements = u256(self.total_endorsements + 1)
-
-        self.endorsements[sender] = sender_map
 
     @gl.public.write
     def revoke_endorsement(self, target: Address) -> None:
