@@ -64,8 +64,13 @@ class Contract(gl.Contract):
     authorized_minters: TreeMap[Address, bool]
 
     # --- token data ---
+    # NOTE: we intentionally do NOT keep a per-owner index here. The
+    # Genlayer TreeMap raises KeyError on missing keys (no autovivify),
+    # and DynArray cannot be instantiated by user code, so a nested
+    # `TreeMap[Address, DynArray[u256]]` is unusable. `Credential.owner`
+    # already records ownership; `get_credentials_of(addr)` scans the
+    # flat credentials map below.
     credentials: TreeMap[u256, Credential]
-    tokens_of: TreeMap[Address, DynArray[u256]]
 
     # --- self-mint tier allowlist (true = anyone can self-mint that tier) ---
     self_mint_allowed: TreeMap[str, bool]
@@ -207,9 +212,6 @@ class Contract(gl.Contract):
         )
         self.credentials[token_id] = cred
 
-        # Genlayer storage auto-creates DynArray on first access.
-        self.tokens_of[to].append(token_id)
-
         self.next_token_id = u256(token_id + 1)
         self.total_supply_count = u256(self.total_supply_count + 1)
         return int(token_id)
@@ -248,26 +250,10 @@ class Contract(gl.Contract):
             raise Exception("credential is soulbound")
         if gl.message.sender_address != cred.owner:
             raise Exception("only current owner can transfer")
-        old_owner = cred.owner
         cred.owner = to
         self.credentials[tid] = cred
-
-        # Remove from old owner's list
-        if old_owner in self.tokens_of:
-            arr = self.tokens_of[old_owner]
-            i = 0
-            while i < len(arr):
-                if int(arr[i]) == int(tid):
-                    # swap-remove
-                    last = len(arr) - 1
-                    if i != last:
-                        arr[i] = arr[last]
-                    arr.pop(last)
-                    break
-                i += 1
-            self.tokens_of[old_owner] = arr
-
-        self.tokens_of[to].append(tid)
+        # No secondary index to maintain — get_credentials_of() scans
+        # the flat credentials map and filters by owner.
 
     # =================================================================
     # Views
@@ -309,30 +295,28 @@ class Contract(gl.Contract):
     @gl.public.view
     def get_credentials_of(self, addr: Address) -> list:
         out: list = []
-        if addr not in self.tokens_of:
-            return out
-        ids = self.tokens_of[addr]
-        i = 0
-        while i < len(ids):
-            tid = ids[i]
+        # Scan the flat credentials map. token_id is assigned sequentially
+        # from 1, so we iterate [1, next_token_id).
+        i = 1
+        end = int(self.next_token_id)
+        while i < end:
+            tid = u256(i)
             if tid in self.credentials:
                 cred = self.credentials[tid]
-                if not cred.revoked:
+                if (not cred.revoked) and cred.owner == addr:
                     out.append(_credential_to_dict(cred))
             i += 1
         return out
 
     @gl.public.view
     def has_credential(self, addr: Address, tier: str) -> bool:
-        if addr not in self.tokens_of:
-            return False
-        ids = self.tokens_of[addr]
-        i = 0
-        while i < len(ids):
-            tid = ids[i]
+        i = 1
+        end = int(self.next_token_id)
+        while i < end:
+            tid = u256(i)
             if tid in self.credentials:
                 cred = self.credentials[tid]
-                if (not cred.revoked) and cred.tier == tier:
+                if (not cred.revoked) and cred.owner == addr and cred.tier == tier:
                     return True
             i += 1
         return False
