@@ -241,13 +241,47 @@ class Contract(gl.Contract):
         def _ask_llm() -> str:
             return gl.nondet.exec_prompt(prompt)
 
-        raw = gl.eq_principle.prompt_comparative(_ask_llm, LLM_EQUIVALENCE_CRITERIA)
-
-        # Parse and validate
         try:
-            decoded = json.loads(raw)
+            raw = gl.eq_principle.prompt_comparative(_ask_llm, LLM_EQUIVALENCE_CRITERIA)
         except Exception:
-            raise Exception("LLM produced non-JSON output")
+            raw = ""
+
+        # The LLM occasionally wraps JSON in markdown fences or prefixes
+        # prose. Be defensive: strip code fences, then carve out the first
+        # JSON object. If nothing parseable comes back, fall through to a
+        # baseline so the profile still gets onboarded.
+        decoded: dict = {}
+        if raw:
+            s = str(raw).strip()
+            if s.startswith("```"):
+                # drop the opening fence line and any trailing fence
+                nl = s.find("\n")
+                if nl >= 0:
+                    s = s[nl + 1 :]
+                if s.endswith("```"):
+                    s = s[: -3]
+                s = s.strip()
+            start = s.find("{")
+            end = s.rfind("}")
+            if start >= 0 and end > start:
+                s = s[start : end + 1]
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, dict):
+                    decoded = parsed
+            except Exception:
+                decoded = {}
+
+        if not decoded:
+            # LLM unavailable or unparseable. Record a low-confidence
+            # baseline so the user's profile still gets created on chain.
+            decoded = {
+                "score": 100,
+                "confidence": 100,
+                "category": CATEGORY_UNVERIFIED,
+                "breakdown": {"activity": 25, "governance": 25, "contribution": 25, "trust": 25},
+                "explanation": "LLM output was unavailable; baseline score recorded. Re-run an evaluation to refresh.",
+            }
 
         score = _clamp(int(decoded.get("score", 0)), 0, MAX_SCORE)
         confidence = _clamp(int(decoded.get("confidence", 0)), 0, MAX_CONFIDENCE)
