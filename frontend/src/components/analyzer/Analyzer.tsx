@@ -172,7 +172,15 @@ export function Analyzer() {
  setJob((j) => (j ? { ...j, onchainTxHash: result.evmTxHash, status: "running" } : j));
  if (initial.id) startPolling(initial.id);
  } catch (e) {
- setError(e instanceof Error ? e.message : writeError ?? "Queue failed");
+ const raw = e instanceof Error ? e.message : writeError ?? "Queue failed";
+ // The contract returns this error when the user re-submits the
+ // exact same signal bundle. Reword it so the UI doesn't feel like
+ // a failure — it's the contract refusing to re-roll the LLM on
+ // unchanged input.
+ const friendly = /signals unchanged|signals_unchanged|already evaluated/i.test(raw)
+ ? "Your signals haven't changed since the last evaluation, so the score stays the same. Connect or update a source to re-score."
+ : raw;
+ setError(friendly);
  } finally {
  setEvalBusy(false);
  }

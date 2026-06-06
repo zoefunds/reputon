@@ -42,8 +42,14 @@ export default async function HistoryPage() {
  {history.map((h, i) => (
  <li key={i} className="p-5">
  <div className="flex flex-wrap items-center gap-2 text-[12px]">
+ {/* Genlayer's gl.block.timestamp isn't exposed on this SDK,
+     so the contract stores created_at = 0 for every history
+     entry. Rendering that as a real date produced "1/1/1970"
+     on every row. Show the eval ordinal instead — history is
+     ordered newest-first, so the newest entry is the highest
+     number. */}
  <span className="font-mono text-accent">
- {new Date(h.created_at * 1000).toLocaleString()}
+ Eval #{history.length - i}
  </span>
  <TrustBadge category={h.category} />
  <span className="text-foreground">score {h.score}</span>

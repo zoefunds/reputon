@@ -120,8 +120,11 @@ export default async function PublicProfile({ params }: Props) {
  </div>
  {latest ? (
  <div className="rounded-xl border border-border bg-card p-5">
+ {/* The contract stores created_at = 0 (gl.block.timestamp isn't
+     exposed on this SDK). Show the eval ordinal — history is
+     ordered newest-first, so latest is the highest. */}
  <p className="text-[12px] text-accent">
- {new Date(latest.created_at * 1000).toLocaleString()}
+ Eval #{history?.history?.length ?? 1}
  </p>
  <p className="mt-2 text-[13.5px] leading-relaxed text-foreground">
  {latest.explanation || ","}

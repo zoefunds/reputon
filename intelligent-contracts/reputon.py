@@ -53,6 +53,18 @@ def _clamp(value: int, lo: int, hi: int) -> int:
     return value
 
 
+def _hash_string(s: str) -> str:
+    """Cheap deterministic hash of a string. NOT cryptographic — just used
+    to spot 'did the input change between evals' under the equivalence
+    principle. Same algorithm the sybil oracle uses to dedupe evidence."""
+    h = 0
+    i = 0
+    while i < len(s):
+        h = (h * 131 + ord(s[i])) & 0xFFFFFFFFFFFFFFFF
+        i += 1
+    return hex(h)
+
+
 # ---------------------------------------------------------------------
 # Storage records
 # ---------------------------------------------------------------------
@@ -74,6 +86,11 @@ class Profile:
     # rejects user-instantiated nested collections.
     history_json: str
     eval_count: u256
+    # Hex hash of the most recent signals_json this profile was
+    # evaluated against. Used by evaluate_and_update to skip re-running
+    # the LLM when the user hasn't changed anything — keeps the score
+    # deterministic for identical inputs.
+    last_signals_hash: str
 
 
 @allow_storage
@@ -172,6 +189,7 @@ class Contract(gl.Contract):
             exists=True,
             history_json="[]",
             eval_count=u256(0),
+            last_signals_hash="",
         )
         self.total_profiles = u256(self.total_profiles + 1)
 
@@ -225,10 +243,24 @@ class Contract(gl.Contract):
                 exists=True,
                 history_json="[]",
                 eval_count=u256(0),
+                last_signals_hash="",
             )
             self.total_profiles = u256(self.total_profiles + 1)
         if len(signals_json) > MAX_SIGNALS_LEN:
             raise Exception("signals payload too large")
+
+        # Cheap deterministic hash of the input bundle. If this profile
+        # was already evaluated against the exact same signal bundle, do
+        # NOT re-run the LLM — the score is already what the engine would
+        # produce. Without this check the LLM's natural per-call variance
+        # would make the score drift on every re-evaluation even when
+        # the user hasn't changed anything.
+        sig_hash = _hash_string(signals_json)
+        prev_for_check = self.profiles[target_addr]
+        if prev_for_check.last_signals_hash == sig_hash and int(prev_for_check.eval_count) > 0:
+            raise Exception(
+                "signals unchanged since last evaluation — connect or update a source to re-score"
+            )
 
         prompt = (
             "You are Reputon, an on-chain reputation engine. "
@@ -375,6 +407,7 @@ class Contract(gl.Contract):
         prev.last_evaluated_at = now
         prev.history_json = json.dumps(history_list)
         prev.eval_count = u256(int(prev.eval_count) + 1)
+        prev.last_signals_hash = sig_hash
         self.profiles[target_addr] = prev
 
         self.total_evaluations = u256(self.total_evaluations + 1)
