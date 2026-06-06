@@ -8,6 +8,7 @@ import { ScoreCard } from "@/components/dashboard/ScoreCard";
 import { BreakdownGrid } from "@/components/dashboard/BreakdownGrid";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { TrustBadge } from "@/components/dashboard/TrustBadge";
+import { EndorseButton } from "@/components/profile/EndorseButton";
 import { onchain } from "@/lib/server/onchain";
 
 export const revalidate = 30;
@@ -167,7 +168,8 @@ export default async function PublicProfile({ params }: Props) {
  </ul>
  )}
  </div>
- <div>
+ <div className="space-y-4">
+ <EndorseButton target={address} />
  <h2 className="mb-3 font-display text-base font-semibold tracking-tight text-foreground">
  Received endorsements ({endorsements.length})
  </h2>

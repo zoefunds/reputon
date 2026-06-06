@@ -80,8 +80,13 @@ class Contract(gl.Contract):
     # --- authorization ---
     authorized_reporters: TreeMap[Address, bool]
 
-    # --- flag store: address -> list of flags ---
-    flags: TreeMap[Address, DynArray[SybilFlag]]
+    # --- flag store ---
+    # Flat-storage layout (same fix pattern we already use elsewhere):
+    # nested TreeMap[Address, DynArray[SybilFlag]] is unusable because
+    # Genlayer's TreeMap raises KeyError on missing keys and DynArray
+    # cannot be instantiated by user code. So we keep each per-address
+    # flag list as a JSON string on disk and parse on read/write.
+    flags_json: TreeMap[Address, str]
     flagged_addresses: DynArray[Address]
     flagged_seen: TreeMap[Address, bool]
 
@@ -132,8 +137,10 @@ class Contract(gl.Contract):
         """
         if len(evidence_json) > MAX_EVIDENCE_LEN:
             raise Exception("evidence payload too large")
-        if target in self.flags and len(self.flags[target]) >= MAX_FLAGS_PER_ADDR:
-            raise Exception("flag cap reached for target")
+        if target in self.flags_json:
+            existing = self._load_flag_list(self.flags_json[target])
+            if len(existing) >= MAX_FLAGS_PER_ADDR:
+                raise Exception("flag cap reached for target")
 
         prompt = (
             "You are the Reputon Sybil Oracle. Given the following evidence "
@@ -222,23 +229,35 @@ class Contract(gl.Contract):
         """Mark a flag as resolved (false positive / fixed). Owner only."""
         if gl.message.sender_address != self.owner:
             raise Exception("only owner")
-        if target not in self.flags:
+        if target not in self.flags_json:
             raise Exception("no flags for target")
-        arr = self.flags[target]
+        arr = self._load_flag_list(self.flags_json[target])
         if index < 0 or index >= len(arr):
             raise Exception("index out of range")
         rec = arr[index]
-        if rec.resolved:
+        if not isinstance(rec, dict):
+            raise Exception("malformed flag entry")
+        if rec.get("resolved"):
             raise Exception("already resolved")
-        rec.resolved = True
-        rec.resolved_at = u256(0)
+        rec["resolved"] = True
+        rec["resolved_at"] = 0
         arr[index] = rec
-        self.flags[target] = arr
+        self.flags_json[target] = json.dumps(arr)
         self.total_resolved = u256(self.total_resolved + 1)
 
     # =================================================================
     # Internal
     # =================================================================
+
+    def _load_flag_list(self, raw: str) -> list:
+        """Parse the JSON-encoded per-address flag list; never raises."""
+        if not raw:
+            return []
+        try:
+            v = json.loads(raw)
+        except Exception:
+            return []
+        return v if isinstance(v, list) else []
 
     def _record_flag(
         self,
@@ -250,19 +269,23 @@ class Contract(gl.Contract):
         reporter: Address,
         automated: bool,
     ) -> None:
-        # Genlayer storage auto-creates DynArray on first access.
-        flag = SybilFlag(
-            severity=severity,
-            reason=reason,
-            summary=summary,
-            evidence_hash=evidence_hash,
-            reporter=reporter,
-            automated=automated,
-            resolved=False,
-            created_at=u256(0),
-            resolved_at=u256(0),
-        )
-        self.flags[target].append(flag)
+        # Append to the per-target flag list, serialized as JSON. We can't
+        # use a nested DynArray here because user code can't instantiate
+        # one and the storage layer doesn't auto-create empty containers.
+        prev = self.flags_json[target] if target in self.flags_json else ""
+        arr = self._load_flag_list(prev)
+        arr.append({
+            "severity": severity,
+            "reason": reason,
+            "summary": summary,
+            "evidence_hash": evidence_hash,
+            "reporter": str(reporter),
+            "automated": bool(automated),
+            "resolved": False,
+            "created_at": 0,
+            "resolved_at": 0,
+        })
+        self.flags_json[target] = json.dumps(arr)
 
         if target not in self.flagged_seen:
             self.flagged_seen[target] = True
@@ -293,44 +316,47 @@ class Contract(gl.Contract):
     @gl.public.view
     def get_flags(self, addr: Address) -> list:
         out: list = []
-        if addr not in self.flags:
+        if addr not in self.flags_json:
             return out
-        arr = self.flags[addr]
+        arr = self._load_flag_list(self.flags_json[addr])
         i = 0
         while i < len(arr):
-            out.append(_flag_to_dict(arr[i], i))
+            f = arr[i]
+            if isinstance(f, dict):
+                out.append(_flag_dict_with_index(f, i))
             i += 1
         return out
 
     @gl.public.view
     def get_active_flags(self, addr: Address) -> list:
         out: list = []
-        if addr not in self.flags:
+        if addr not in self.flags_json:
             return out
-        arr = self.flags[addr]
+        arr = self._load_flag_list(self.flags_json[addr])
         i = 0
         while i < len(arr):
             f = arr[i]
-            if not f.resolved:
-                out.append(_flag_to_dict(f, i))
+            if isinstance(f, dict) and not f.get("resolved"):
+                out.append(_flag_dict_with_index(f, i))
             i += 1
         return out
 
     @gl.public.view
     def get_severity(self, addr: Address) -> str:
         """Return the highest active severity for `addr`, or empty string."""
-        if addr not in self.flags:
+        if addr not in self.flags_json:
             return ""
         worst = ""
-        arr = self.flags[addr]
+        arr = self._load_flag_list(self.flags_json[addr])
         i = 0
         while i < len(arr):
             f = arr[i]
-            if not f.resolved:
+            if isinstance(f, dict) and not f.get("resolved"):
+                sev = str(f.get("severity", ""))
                 if worst == "":
-                    worst = f.severity
+                    worst = sev
                 else:
-                    worst = _max_severity(worst, f.severity)
+                    worst = _max_severity(worst, sev)
             i += 1
         return worst
 
@@ -360,16 +386,17 @@ class Contract(gl.Contract):
 # Module helpers
 # ---------------------------------------------------------------------
 
-def _flag_to_dict(f: SybilFlag, index: int) -> dict:
+def _flag_dict_with_index(f: dict, index: int) -> dict:
+    """Attach the index to a JSON-stored flag dict for API consumers."""
     return {
         "index": index,
-        "severity": f.severity,
-        "reason": f.reason,
-        "summary": f.summary,
-        "evidence_hash": f.evidence_hash,
-        "reporter": str(f.reporter),
-        "automated": bool(f.automated),
-        "resolved": bool(f.resolved),
-        "created_at": int(f.created_at),
-        "resolved_at": int(f.resolved_at),
+        "severity": str(f.get("severity", "")),
+        "reason": str(f.get("reason", "")),
+        "summary": str(f.get("summary", "")),
+        "evidence_hash": str(f.get("evidence_hash", "")),
+        "reporter": str(f.get("reporter", "")),
+        "automated": bool(f.get("automated", False)),
+        "resolved": bool(f.get("resolved", False)),
+        "created_at": int(f.get("created_at", 0)),
+        "resolved_at": int(f.get("resolved_at", 0)),
     }

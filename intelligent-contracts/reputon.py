@@ -121,9 +121,19 @@ class Contract(gl.Contract):
     profiles: TreeMap[Address, Profile]
     # history + eval_count are stored on Profile (history_json + eval_count fields)
 
-    endorsements_given_keys: TreeMap[Address, DynArray[Address]]
-    endorsements_received_keys: TreeMap[Address, DynArray[Address]]
-    endorsements: TreeMap[Address, TreeMap[Address, EndorsementRecord]]
+    # Endorsements use FLAT storage. Genlayer's TreeMap raises KeyError
+    # on missing keys and DynArray cannot be instantiated by user code,
+    # so nested TreeMap[Addr, TreeMap[Addr, X]] and TreeMap[Addr, DynArray[Addr]]
+    # are both unusable. Same pattern we already use for Profile history.
+    #
+    #   endorsement_keys_given_json[endorser]  → JSON list of target hex strings
+    #   endorsement_keys_received_json[target] → JSON list of endorser hex strings
+    #   endorsement_records[composite_key]      → EndorsementRecord
+    #
+    # composite_key = "{endorser_lowercase}|{target_lowercase}"
+    endorsement_keys_given_json: TreeMap[Address, str]
+    endorsement_keys_received_json: TreeMap[Address, str]
+    endorsement_records: TreeMap[str, EndorsementRecord]
 
     # =================================================================
     # Constructor
@@ -366,6 +376,20 @@ class Contract(gl.Contract):
     # Endorsements (write)
     # =================================================================
 
+    def _endorsement_key(self, endorser: Address, target: Address) -> str:
+        """Composite key used in the flat endorsement_records TreeMap."""
+        return str(endorser).lower() + "|" + str(target).lower()
+
+    def _load_key_list(self, raw: str) -> list:
+        """Best-effort parse of a JSON list-of-hex-strings; never raises."""
+        if not raw:
+            return []
+        try:
+            v = json.loads(raw)
+        except Exception:
+            return []
+        return v if isinstance(v, list) else []
+
     @gl.public.write
     def add_endorsement(self, target: Address, weight: int, note: str) -> None:
         """Caller endorses `target`. Repeated calls overwrite the prior entry."""
@@ -382,45 +406,57 @@ class Contract(gl.Contract):
         note = note[:MAX_NOTE_LEN]
         now = u256(0)
 
-        # Genlayer storage auto-creates nested TreeMaps and DynArrays on
-        # access. Do NOT instantiate them in user code.
-        sender_map = self.endorsements[sender]
+        key = self._endorsement_key(sender, target_addr)
+        sender_hex = str(sender).lower()
+        target_hex = str(target_addr).lower()
 
-        if target_addr in sender_map:
-            rec = sender_map[target_addr]
+        if key in self.endorsement_records:
+            rec = self.endorsement_records[key]
             rec.weight = u256(w)
             rec.note = note
             rec.revoked = False
-            sender_map[target_addr] = rec
-        else:
-            sender_map[target_addr] = EndorsementRecord(
-                from_addr=sender,
-                to_addr=target_addr,
-                weight=u256(w),
-                note=note,
-                created_at=now,
-                revoked_at=u256(0),
-                revoked=False,
-            )
-            self.endorsements_given_keys[sender].append(target_addr)
-            self.endorsements_received_keys[target_addr].append(sender)
-            self.total_endorsements = u256(self.total_endorsements + 1)
+            self.endorsement_records[key] = rec
+            return
+
+        # First time this endorser endorses this target: write the record
+        # and maintain the per-side index lists (JSON arrays on disk).
+        self.endorsement_records[key] = EndorsementRecord(
+            from_addr=sender,
+            to_addr=target_addr,
+            weight=u256(w),
+            note=note,
+            created_at=now,
+            revoked_at=u256(0),
+            revoked=False,
+        )
+
+        given_prev = self.endorsement_keys_given_json[sender] if sender in self.endorsement_keys_given_json else ""
+        given_list = self._load_key_list(given_prev)
+        if target_hex not in given_list:
+            given_list.append(target_hex)
+            self.endorsement_keys_given_json[sender] = json.dumps(given_list)
+
+        received_prev = self.endorsement_keys_received_json[target_addr] if target_addr in self.endorsement_keys_received_json else ""
+        received_list = self._load_key_list(received_prev)
+        if sender_hex not in received_list:
+            received_list.append(sender_hex)
+            self.endorsement_keys_received_json[target_addr] = json.dumps(received_list)
+
+        self.total_endorsements = u256(self.total_endorsements + 1)
 
     @gl.public.write
     def revoke_endorsement(self, target: Address) -> None:
         """Caller revokes their existing endorsement for `target`."""
         sender = gl.message.sender_address
-        if sender not in self.endorsements:
-            raise Exception("no endorsements from sender")
-        sender_map = self.endorsements[sender]
-        if target not in sender_map:
+        target_addr = target if hasattr(target, "as_bytes") else Address(target)
+        key = self._endorsement_key(sender, target_addr)
+        if key not in self.endorsement_records:
             raise Exception("no endorsement for target")
-        rec = sender_map[target]
+        rec = self.endorsement_records[key]
         if rec.revoked:
             raise Exception("already revoked")
         rec.revoked = True
-        sender_map[target] = rec
-        self.endorsements[sender] = sender_map
+        self.endorsement_records[key] = rec
 
     # =================================================================
     # Views
@@ -497,34 +533,32 @@ class Contract(gl.Contract):
     @gl.public.view
     def get_endorsements_given(self, addr: Address) -> list:
         out: list = []
-        if addr not in self.endorsements:
+        if addr not in self.endorsement_keys_given_json:
             return out
-        sender_map = self.endorsements[addr]
-        if addr not in self.endorsements_given_keys:
-            return out
-        keys = self.endorsements_given_keys[addr]
+        targets = self._load_key_list(self.endorsement_keys_given_json[addr])
+        endorser_hex = str(addr).lower()
         i = 0
-        while i < len(keys):
-            target = keys[i]
-            if target in sender_map:
-                rec = sender_map[target]
-                out.append(_endorsement_to_dict(rec))
+        while i < len(targets):
+            t_hex = str(targets[i]).lower()
+            key = endorser_hex + "|" + t_hex
+            if key in self.endorsement_records:
+                out.append(_endorsement_to_dict(self.endorsement_records[key]))
             i += 1
         return out
 
     @gl.public.view
     def get_endorsements_received(self, addr: Address) -> list:
         out: list = []
-        if addr not in self.endorsements_received_keys:
+        if addr not in self.endorsement_keys_received_json:
             return out
-        senders = self.endorsements_received_keys[addr]
+        senders = self._load_key_list(self.endorsement_keys_received_json[addr])
+        target_hex = str(addr).lower()
         i = 0
         while i < len(senders):
-            sender = senders[i]
-            if sender in self.endorsements:
-                sm = self.endorsements[sender]
-                if addr in sm:
-                    out.append(_endorsement_to_dict(sm[addr]))
+            s_hex = str(senders[i]).lower()
+            key = s_hex + "|" + target_hex
+            if key in self.endorsement_records:
+                out.append(_endorsement_to_dict(self.endorsement_records[key]))
             i += 1
         return out
 

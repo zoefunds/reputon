@@ -35,9 +35,20 @@ app.get("/credential/:tokenId", async (c) => {
   try {
     return c.json(await reputonNft.credential(tokenId));
   } catch (e) {
-    throw new HTTPException(404, {
-      message: (e as Error).message ?? "token not found",
-    });
+    // The contract throws Exception("token not found") for missing ids,
+    // genlayer-js wraps that in a multi-line viem string. Don't leak
+    // either to the response body — return a clean JSON 404.
+    const raw = (e as Error).message ?? "";
+    const isMissing = /token not found|execution failed|profile not found/i.test(raw);
+    return c.json(
+      {
+        error: {
+          message: isMissing ? "token not found" : "failed to read credential",
+          code: 404,
+        },
+      },
+      404
+    );
   }
 });
 

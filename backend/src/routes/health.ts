@@ -25,12 +25,22 @@ app.get("/", async (c) => {
     checks.redis = { ok: false, detail: (e as Error).message };
   }
 
-  // s3 (minio / R2 / S3) — non-critical, used for NFT image hosting only.
-  try {
-    const ok = await storage().bucketExists(env().S3_BUCKET);
-    checks.storage = { ok };
-  } catch (e) {
-    checks.storage = { ok: false, detail: (e as Error).message };
+  // s3 (minio / R2 / S3) — optional. Default config points at a local
+  // minio instance that doesn't exist in prod; only probe when the
+  // endpoint has been explicitly overridden, otherwise mark "not
+  // configured" so prod health stays "ok" instead of flapping to
+  // "degraded" forever for an unused feature.
+  const cfg = env();
+  const usingDefaultEndpoint = cfg.S3_ENDPOINT === "http://localhost:9000";
+  if (!usingDefaultEndpoint) {
+    try {
+      const ok = await storage().bucketExists(cfg.S3_BUCKET);
+      checks.storage = { ok };
+    } catch (e) {
+      checks.storage = { ok: false, detail: (e as Error).message };
+    }
+  } else {
+    checks.storage = { ok: true, detail: "not configured" };
   }
 
   // Health is OK if the two critical deps are up. Storage is reported but
