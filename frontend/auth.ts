@@ -9,6 +9,7 @@
 import NextAuth, { type DefaultSession, type NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";
+import Twitter from "next-auth/providers/twitter";
 import Nodemailer from "next-auth/providers/nodemailer";
 import Credentials from "next-auth/providers/credentials";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
@@ -48,6 +49,19 @@ if (process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET) {
  clientId: process.env.AUTH_GITHUB_ID,
  clientSecret: process.env.AUTH_GITHUB_SECRET,
  authorization: { params: { scope: "read:user public_repo" } },
+ allowDangerousEmailAccountLinking: true,
+ })
+ );
+}
+
+// Twitter / X OAuth 2.0 — identity-only on the free tier. We get the
+// verified handle and follower count via /users/me; tweet history
+// requires a paid Twitter API tier we don't pull from yet.
+if (process.env.AUTH_TWITTER_ID && process.env.AUTH_TWITTER_SECRET) {
+ providers.push(
+ Twitter({
+ clientId: process.env.AUTH_TWITTER_ID,
+ clientSecret: process.env.AUTH_TWITTER_SECRET,
  allowDangerousEmailAccountLinking: true,
  })
  );

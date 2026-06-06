@@ -149,15 +149,50 @@ export type TallySummary = {
   daos: number;
 };
 
+const TALLY_GQL = "https://api.tally.xyz/query";
+
 /**
- * Tally's GraphQL is mostly key-gated for non-trivial queries. For now we
- * stub this and report ok:false — the Snapshot scanner above covers most
- * governance reads at no cost. If you set TALLY_API_KEY we'll wire the
- * real query in a follow-up.
+ * Tally read of an account's delegations across governors. We only
+ * surface a DAO count — that's the score-relevant signal. If the key
+ * isn't set, return ok:false and let the Snapshot scanner carry the
+ * governance signal alone.
  */
-export async function scanTally(_address: string): Promise<TallySummary> {
-  void _address;
-  if (!process.env.TALLY_API_KEY) return { ok: false, daos: 0 };
-  // TODO: real Tally query once key is provided.
-  return { ok: false, daos: 0 };
+export async function scanTally(address: string): Promise<TallySummary> {
+  const fallback: TallySummary = { ok: false, daos: 0 };
+  const key = process.env.TALLY_API_KEY;
+  if (!key) return fallback;
+  const query = `
+    query AccountDelegations($address: Address!) {
+      delegations(input: { filters: { address: $address }, page: { limit: 50 } }) {
+        nodes {
+          ... on Delegation {
+            organization { id }
+          }
+        }
+      }
+    }
+  `;
+  try {
+    const r = await fetch(TALLY_GQL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "Api-Key": key,
+      },
+      body: JSON.stringify({ query, variables: { address } }),
+      cache: "no-store",
+    });
+    if (!r.ok) return fallback;
+    const body = (await r.json()) as {
+      data?: { delegations?: { nodes?: { organization?: { id: string } }[] } };
+    };
+    const nodes = body.data?.delegations?.nodes ?? [];
+    const unique = new Set<string>();
+    for (const n of nodes) {
+      if (n?.organization?.id) unique.add(n.organization.id);
+    }
+    return { ok: true, daos: unique.size };
+  } catch {
+    return fallback;
+  }
 }

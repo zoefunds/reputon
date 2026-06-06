@@ -133,7 +133,7 @@ export function ConnectorCards() {
         sub="Verifies your Telegram identity via the official Login Widget."
         right={
           conn?.providers.telegram.configured ? (
-            <ActionBtn disabled>Telegram Login (soon)</ActionBtn>
+            <TelegramLogin onLinked={refresh} />
           ) : (
             <Pill variant="muted">Provider not configured</Pill>
           )
@@ -308,5 +308,64 @@ function Hint({ children }: { children: React.ReactNode }) {
     <p className="rounded-md border border-dashed border-border/70 bg-background px-3 py-2 text-[12px] text-accent">
       {children}
     </p>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Telegram Login Widget
+// ---------------------------------------------------------------------------
+
+const TG_BOT_NAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME ?? "";
+
+/**
+ * Renders the official Telegram Login Widget. Telegram serves the widget
+ * as a script that posts auth_data to a global callback once the user
+ * approves. We forward that payload to /api/me/connections/telegram for
+ * HMAC verification + persistence.
+ */
+function TelegramLogin({ onLinked }: { onLinked: () => void }) {
+  // Stash a global callback the widget can call. Hooks must be called
+  // unconditionally, so we register even when TG_BOT_NAME is missing —
+  // the widget script just never loads in that case.
+  useEffect(() => {
+    if (!TG_BOT_NAME) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).onTelegramAuth = async (payload: Record<string, unknown>) => {
+      try {
+        const r = await fetch("/api/me/connections/telegram", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (r.ok) onLinked();
+      } catch {
+        /* swallow */
+      }
+    };
+  }, [onLinked]);
+
+  if (!TG_BOT_NAME) {
+    return (
+      <span className="text-[11px] text-accent">
+        Set <code className="rounded bg-background px-1">NEXT_PUBLIC_TELEGRAM_BOT_NAME</code> to your bot&apos;s @username.
+      </span>
+    );
+  }
+
+  return (
+    <div
+      ref={(node) => {
+        if (!node || node.dataset.mounted === "1") return;
+        node.dataset.mounted = "1";
+        const s = document.createElement("script");
+        s.async = true;
+        s.src = "https://telegram.org/js/telegram-widget.js?22";
+        s.setAttribute("data-telegram-login", TG_BOT_NAME);
+        s.setAttribute("data-size", "medium");
+        s.setAttribute("data-onauth", "onTelegramAuth(user)");
+        s.setAttribute("data-request-access", "write");
+        node.appendChild(s);
+      }}
+    />
   );
 }

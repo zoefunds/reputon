@@ -28,7 +28,21 @@ export async function GET(req: Request) {
   }
   if (source === "protocols") {
     const [snapshot, tally] = await Promise.all([scanSnapshot(address), scanTally(address)]);
-    return NextResponse.json({ source: "protocols", address, snapshot, tally });
+    // Combined ok if either source returned data; surface both so the
+    // Analyzer's preview card can summarise governance + delegation in
+    // one line.
+    return NextResponse.json({
+      source: "protocols",
+      address,
+      snapshot,
+      tally,
+      summary: {
+        ok: snapshot.ok || tally.ok,
+        vote_count: snapshot.vote_count,
+        spaces: snapshot.spaces,
+        delegated_daos: tally.daos,
+      },
+    });
   }
   return NextResponse.json(
     { error: { message: "source must be credentials | protocols" } },
