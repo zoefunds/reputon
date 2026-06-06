@@ -79,7 +79,12 @@ const SECURITY_HEADERS = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  // 'same-origin' blocks popups (Telegram Login Widget, Coinbase Smart
+  // Wallet, RainbowKit's WalletConnect modal) from posting auth payloads
+  // back to the opener window. 'same-origin-allow-popups' keeps the
+  // SharedArrayBuffer-class isolation for our own contexts but lets
+  // third-party popups reach `window.opener.postMessage`.
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
   { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
 ];
 

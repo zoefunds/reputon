@@ -133,20 +133,15 @@ export function ConnectorCards() {
         title="Telegram"
         sub="Verifies your Telegram identity via the official Login Widget."
         right={
-          conn?.providers.telegram.configured ? (
-            <TelegramLogin onLinked={refresh} />
-          ) : (
+          !conn?.providers.telegram.configured ? (
             <Pill variant="muted">Provider not configured</Pill>
-          )
+          ) : null
         }
         body={
           conn?.providers.telegram.configured ? (
-            <Hint>
-              If no Telegram button appears above, the bot&apos;s domain isn&apos;t
-              whitelisted yet. Open <strong>@BotFather</strong> → <code className="rounded bg-foreground/10 px-1">/mybots</code> →
-              your bot → <strong>Bot Settings</strong> → <strong>Domain</strong> → send{" "}
-              <code className="rounded bg-foreground/10 px-1">reputon-mocha.vercel.app</code>.
-            </Hint>
+            <div className="overflow-x-auto">
+              <TelegramLogin onLinked={refresh} />
+            </div>
           ) : null
         }
       />
