@@ -69,6 +69,31 @@ export function Analyzer() {
  const { address: connectedAddress, isConnected } = useAccount();
  const { write: writeOnchain, status: writeStatus, error: writeError } = useGenLayerWrite();
 
+ // 30-day evaluation cooldown — checked server-side using DB timestamps
+ // (the contract can't see real wall-clock time). We render either the
+ // Run-evaluation button or a countdown banner depending on this.
+ const [cooldown, setCooldown] = useState<{ can: boolean; daysRemaining: number; nextAt: string | null } | null>(null);
+ useEffect(() => {
+  let alive = true;
+  (async () => {
+   try {
+    const r = await fetch("/api/me/evaluate/cooldown", { cache: "no-store" });
+    if (!r.ok) return;
+    const j = (await r.json()) as {
+     can_evaluate: boolean;
+     days_remaining: number;
+     next_available_at: string | null;
+    };
+    if (alive) setCooldown({ can: j.can_evaluate, daysRemaining: j.days_remaining, nextAt: j.next_available_at });
+   } catch {
+    /* ignore */
+   }
+  })();
+  return () => {
+   alive = false;
+  };
+ }, [job?.id]);
+
  useEffect(
  () => () => {
  if (pollRef.current) clearInterval(pollRef.current);
@@ -244,7 +269,10 @@ export function Analyzer() {
  {previewBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
  Preview bundle
  </Button>
- <Button onClick={runEvaluation} disabled={evalBusy || !isConnected}>
+ <Button
+  onClick={runEvaluation}
+  disabled={evalBusy || !isConnected || cooldown?.can === false}
+ >
  {evalBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
  {writeStatus === "switching"
   ? "Switching to GenLayer…"
@@ -252,11 +280,19 @@ export function Analyzer() {
   ? "Confirm in wallet…"
   : writeStatus === "mining"
   ? "Awaiting consensus…"
+  : cooldown?.can === false
+  ? `Next eval in ${cooldown.daysRemaining} day${cooldown.daysRemaining === 1 ? "" : "s"}`
   : "Run evaluation"}
  </Button>
  {!isConnected && (
   <p className="text-[12px] text-accent">
    Connect a wallet to evaluate.
+  </p>
+ )}
+ {cooldown?.can === false && (
+  <p className="text-[12px] text-accent">
+   Evaluations are limited to once every 30 days. Next available{" "}
+   {cooldown.nextAt ? new Date(cooldown.nextAt).toLocaleDateString() : "soon"}.
   </p>
  )}
  {error && (

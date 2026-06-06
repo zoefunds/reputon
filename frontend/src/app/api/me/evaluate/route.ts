@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { getDb } from "@reputon/db/client";
 import { evaluationJobs } from "@reputon/db/schema";
 import { getCurrentUser } from "@/lib/server/user";
@@ -9,6 +9,15 @@ import { compactSignalsJson } from "@/lib/server/compactSignals";
 import { sameOrigin } from "@/lib/server/csrf";
 
 const db = getDb();
+
+/**
+ * Per-wallet rate limit on evaluate. Genlayer's LLM consensus is expensive
+ * and the protocol's design intent is "score moves when your contributions
+ * change over weeks, not minutes". We enforce here using DB timestamps
+ * because the contract can't see real wall-clock time (gl.block.timestamp
+ * isn't exposed on this SDK).
+ */
+const EVAL_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 const Body = z.object({
  github_handle: z.string().max(80).optional(),
@@ -49,6 +58,36 @@ export async function POST(req: Request) {
  { status: 400 }
  );
  }
+
+ // 30-day cooldown. We only count jobs that actually made it on-chain
+ // (status !== "failed" AND have a tx hash) so a stuck job from a
+ // previous redeploy doesn't permanently lock the user out.
+ const [recent] = await db
+  .select({ createdAt: evaluationJobs.createdAt, status: evaluationJobs.status, txHash: evaluationJobs.onchainTxHash })
+  .from(evaluationJobs)
+  .where(and(eq(evaluationJobs.userId, u.id), ne(evaluationJobs.status, "failed")))
+  .orderBy(desc(evaluationJobs.createdAt))
+  .limit(1);
+ if (recent && recent.txHash) {
+  const last = new Date(recent.createdAt).getTime();
+  const elapsed = Date.now() - last;
+  if (elapsed < EVAL_COOLDOWN_MS) {
+   const nextAvailableAt = new Date(last + EVAL_COOLDOWN_MS).toISOString();
+   const daysRemaining = Math.ceil((EVAL_COOLDOWN_MS - elapsed) / (24 * 60 * 60 * 1000));
+   return NextResponse.json(
+    {
+     error: {
+      message: `Evaluations are limited to once every 30 days. Next available in ${daysRemaining} day${daysRemaining === 1 ? "" : "s"}.`,
+      code: "cooldown",
+      next_available_at: nextAvailableAt,
+      days_remaining: daysRemaining,
+     },
+    },
+    { status: 429, headers: { "Retry-After": String(Math.ceil((EVAL_COOLDOWN_MS - elapsed) / 1000)) } }
+   );
+  }
+ }
+
  const bundle = await buildBundle(u.primaryWallet.address, parsed.data as SignalInputs, u.id);
  const signalsJson = compactSignalsJson(bundle as unknown as Record<string, unknown>);
  const [row] = await db
