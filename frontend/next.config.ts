@@ -47,11 +47,12 @@ const FRAME_SRC = [
   "https://oauth.telegram.org",
 ].join(" ");
 
-// In dev, Next needs 'unsafe-eval' for HMR; in prod we keep it strict.
-// telegram.org is needed at runtime because the widget injects a script
-// tag pointed at https://telegram.org/js/telegram-widget.js.
+// Telegram's Login Widget uses eval() internally (it evaluates the
+// `data-onauth` attribute as JS at iframe init), so 'unsafe-eval' is
+// required even in prod. The script-src is still scoped to ourselves
+// + telegram.org, so the actual attack surface is small.
 const SCRIPT_SRC = isProd
-  ? "'self' 'unsafe-inline' https://telegram.org"
+  ? "'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org"
   : "'self' 'unsafe-eval' 'unsafe-inline' https://telegram.org";
 
 const CSP = [
