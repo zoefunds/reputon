@@ -1,6 +1,7 @@
 import { Users } from "lucide-react";
 import { Container } from "@/components/ui/container";
 import { EmptyState } from "@/components/dashboard/EmptyState";
+import { EndorseSomeoneForm } from "@/components/endorsements/EndorseSomeoneForm";
 import { requireUser } from "@/lib/server/user";
 import { onchain, type Endorsement } from "@/lib/server/onchain";
 
@@ -36,9 +37,12 @@ export default async function EndorsementsPage() {
  body="Endorsements are on-chain pointers between wallets."
  />
  ) : (
+ <div className="space-y-6">
+ <EndorseSomeoneForm />
  <div className="grid gap-8 lg:grid-cols-2">
  <Panel title="Received" data={received} side="from" />
  <Panel title="Given" data={given} side="to" />
+ </div>
  </div>
  )}
  </Container>

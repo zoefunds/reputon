@@ -30,9 +30,19 @@ app.get("/profile", async (c) => {
   try {
     return c.json(await reputon.profile(parsed.data.address));
   } catch (e) {
-    throw new HTTPException(404, {
-      message: (e as Error).message ?? "profile not found",
-    });
+    // Don't let genlayer-js's multi-line viem error leak into the response
+    // body. Collapse to a clean JSON 404 with a stable message.
+    const raw = (e as Error).message ?? "";
+    const isMissing = /profile not found|execution failed/i.test(raw);
+    return c.json(
+      {
+        error: {
+          message: isMissing ? "profile not found" : "failed to read profile",
+          code: 404,
+        },
+      },
+      404
+    );
   }
 });
 
@@ -43,9 +53,17 @@ app.get("/score", async (c) => {
   try {
     return c.json(await reputon.score(parsed.data.address));
   } catch (e) {
-    throw new HTTPException(404, {
-      message: (e as Error).message ?? "profile not found",
-    });
+    const raw = (e as Error).message ?? "";
+    const isMissing = /profile not found|execution failed/i.test(raw);
+    return c.json(
+      {
+        error: {
+          message: isMissing ? "profile not found" : "failed to read score",
+          code: 404,
+        },
+      },
+      404
+    );
   }
 });
 

@@ -61,12 +61,20 @@ export type GovernanceActivity = {
 };
 
 async function gql<T>(query: string, variables: Record<string, unknown>): Promise<T | null> {
+  // Snapshot's public hub occasionally hangs under load. A request without
+  // a timeout would tie up the Vercel function until the platform's hard
+  // limit (and stall whatever page is waiting on /api/me/governance).
+  // Abort at 6s and return null — callers always treat null as "no data
+  // available" and render an empty state.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6_000);
   try {
     const res = await fetch(SNAPSHOT_GQL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, variables }),
       next: { revalidate: 60 },
+      signal: ctrl.signal,
     });
     if (!res.ok) return null;
     const body = (await res.json()) as { data?: T; errors?: unknown };
@@ -74,6 +82,8 @@ async function gql<T>(query: string, variables: Record<string, unknown>): Promis
     return body.data ?? null;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

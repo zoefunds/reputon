@@ -128,12 +128,15 @@ export async function scanSnapshot(address: string): Promise<SnapshotSummary> {
       }
     }
   `;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6_000);
   try {
     const r = await fetch(SNAPSHOT_GQL, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ query, variables: { voter: address } }),
       cache: "no-store",
+      signal: ctrl.signal,
     });
     if (!r.ok) return fallback;
     const body = (await r.json()) as {
@@ -157,6 +160,8 @@ export async function scanSnapshot(address: string): Promise<SnapshotSummary> {
     };
   } catch {
     return fallback;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

@@ -360,9 +360,16 @@ class Contract(gl.Contract):
         # Trim to most-recent MAX_HISTORY entries
         history_list = history_list[:MAX_HISTORY]
 
-        # Update profile snapshot (single TreeMap setitem call, which we've
-        # already proven works for scalar/dataclass values).
-        prev.score = u256(score)
+        # High-water-mark scoring: the public profile.score is monotonic —
+        # re-running the analyzer can only improve it, never reduce it.
+        # The history above still records every actual LLM-returned score
+        # (positive or negative delta), so the on-chain audit trail stays
+        # fully transparent. Confidence / category / breakdown always
+        # reflect the latest run because they describe what the LLM saw
+        # this time, not the historical best.
+        new_score = u256(score)
+        if int(new_score) > int(prev.score):
+            prev.score = new_score
         prev.confidence = u256(confidence)
         prev.category = category
         prev.last_evaluated_at = now
