@@ -107,6 +107,17 @@ providers.push(
 
  const address = siwe.address.toLowerCase();
 
+ // Wallets listed in ADMIN_WALLETS (comma-separated, case-insensitive)
+ // get role=admin auto-promoted on sign-in. Lets us seed the admin
+ // wallet declaratively without a DB migration.
+ const adminSet = new Set(
+ (process.env.ADMIN_WALLETS ?? "")
+ .split(",")
+ .map((s) => s.trim().toLowerCase())
+ .filter(Boolean)
+ );
+ const isAdminWallet = adminSet.has(address);
+
  // Find or create wallet → user
  const existingWallet = await db
  .select()
@@ -123,6 +134,7 @@ providers.push(
  .values({
  name: `Wallet ${address.slice(0, 6)}…${address.slice(-4)}`,
  image: null,
+ role: isAdminWallet ? "admin" : "user",
  })
  .returning({ id: users.id });
  userId = created.id;
@@ -135,6 +147,12 @@ providers.push(
  isPrimary: true,
  })
  .onConflictDoNothing();
+ }
+
+ // Idempotently promote on every sign-in so we can move the admin
+ // role between wallets just by editing env.
+ if (isAdminWallet) {
+ await db.update(users).set({ role: "admin" }).where(eq(users.id, userId));
  }
 
  const [user] = await db

@@ -42,12 +42,17 @@ const FRAME_SRC = [
   "'self'",
   "https://verify.walletconnect.com",
   "https://verify.walletconnect.org",
+  // Telegram Login Widget loads its auth dialog in an iframe from
+  // oauth.telegram.org. Without this the widget renders nothing.
+  "https://oauth.telegram.org",
 ].join(" ");
 
 // In dev, Next needs 'unsafe-eval' for HMR; in prod we keep it strict.
+// telegram.org is needed at runtime because the widget injects a script
+// tag pointed at https://telegram.org/js/telegram-widget.js.
 const SCRIPT_SRC = isProd
-  ? "'self' 'unsafe-inline'"
-  : "'self' 'unsafe-eval' 'unsafe-inline'";
+  ? "'self' 'unsafe-inline' https://telegram.org"
+  : "'self' 'unsafe-eval' 'unsafe-inline' https://telegram.org";
 
 const CSP = [
   `default-src 'self'`,
