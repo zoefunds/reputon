@@ -197,8 +197,8 @@ export function Analyzer() {
  }
 
  return (
- <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr]">
- <div className="space-y-6">
+ <div className="grid gap-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+ <div className="min-w-0 space-y-6">
  {/* Verified sources — every signal in the bundle below is pulled
      server-side from a connected account or a public wallet scan,
      so users can't fake their inputs. */}
@@ -259,7 +259,7 @@ export function Analyzer() {
  </div>
  </div>
 
- <aside className="space-y-6">
+ <aside className="min-w-0 space-y-6">
  <Card title="Signal bundle">
  {bundle ? (
  <>
@@ -270,7 +270,7 @@ export function Analyzer() {
  {bundle.address.slice(0, 8)}…{bundle.address.slice(-4)}
  </span>
  </p>
- <pre className="mt-3 max-h-72 overflow-auto rounded-md border border-border bg-background p-3 font-mono text-[11.5px] leading-relaxed text-foreground">
+ <pre className="mt-3 max-h-72 w-full overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-background p-3 font-mono text-[11.5px] leading-relaxed text-foreground">
  {JSON.stringify(bundle, null, 2)}
  </pre>
  </>

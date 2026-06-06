@@ -42,6 +42,7 @@ type CredentialsPreview = {
   score: number | null;
   stamps: number;
   passing: boolean;
+  reason?: "missing_key" | "fetch_failed";
 };
 
 type ProtocolsPreview = {
@@ -83,7 +84,7 @@ export function ConnectorCards() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
       {/* GitHub — OAuth-verified */}
       <Card
         icon={<Github className="h-4 w-4" />}
@@ -138,6 +139,16 @@ export function ConnectorCards() {
             <Pill variant="muted">Provider not configured</Pill>
           )
         }
+        body={
+          conn?.providers.telegram.configured ? (
+            <Hint>
+              If no Telegram button appears above, the bot&apos;s domain isn&apos;t
+              whitelisted yet. Open <strong>@BotFather</strong> → <code className="rounded bg-foreground/10 px-1">/mybots</code> →
+              your bot → <strong>Bot Settings</strong> → <strong>Domain</strong> → send{" "}
+              <code className="rounded bg-foreground/10 px-1">reputon-mocha.vercel.app</code>.
+            </Hint>
+          ) : null
+        }
       />
 
       {/* Credentials — Gitcoin Passport */}
@@ -162,8 +173,22 @@ export function ConnectorCards() {
                 okLabel="Passing humanity threshold"
                 offLabel="Below humanity threshold"
               />
+            ) : credentials.reason === "missing_key" ? (
+              <Hint>
+                Passport API key not configured. Get one at{" "}
+                <a
+                  className="underline underline-offset-2"
+                  href="https://developer.passport.xyz/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  developer.passport.xyz
+                </a>{" "}
+                and set <code className="rounded bg-foreground/10 px-1">PASSPORT_API_KEY</code> +{" "}
+                <code className="rounded bg-foreground/10 px-1">PASSPORT_SCORER_ID</code>.
+              </Hint>
             ) : (
-              <Hint>Passport could not be read for this wallet.</Hint>
+              <Hint>Passport scorer didn&apos;t return a result for this wallet.</Hint>
             )
           ) : null
         }

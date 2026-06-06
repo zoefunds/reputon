@@ -21,27 +21,48 @@ export type PassportSummary = {
   passing: boolean;
   /** Provider-side last-update timestamp, if reported. */
   last_updated: string | null;
+  /** Distinguishes "no key" from "wallet has no score" for the UI. */
+  reason?: "missing_key" | "fetch_failed";
 };
 
 /**
- * Public Passport scorer ("Stamp API"). We use the unauthenticated read
- * endpoint that requires no key. If Passport changes the endpoint we
- * degrade gracefully — never throw, just return `ok:false`.
+ * Gitcoin Passport (now "Human Passport") scorer.
+ *
+ * The public endpoint was deprecated — every read now requires an API key
+ * from developer.passport.xyz plus a Scorer ID. Both must be set as
+ * server-side env vars: PASSPORT_API_KEY and PASSPORT_SCORER_ID.
+ *
+ * If they're not set we return ok:false with reason="missing_key" so the
+ * UI can show "Passport API key not configured" instead of the generic
+ * "could not be read".
  */
 export async function scanPassport(address: string): Promise<PassportSummary> {
-  const fallback: PassportSummary = {
+  const fallback = (reason: PassportSummary["reason"]): PassportSummary => ({
     ok: false,
     score: null,
     stamps: 0,
     passing: false,
     last_updated: null,
-  };
+    reason,
+  });
+  const apiKey = process.env.PASSPORT_API_KEY;
+  const scorerId = process.env.PASSPORT_SCORER_ID;
+  if (!apiKey || !scorerId) return fallback("missing_key");
+
   try {
+    // Passport v2 scorer endpoint. The Authorization header is the raw
+    // API key, NOT a Bearer prefix.
     const r = await fetch(
-      `https://api.passport.xyz/v2/stamps/${encodeURIComponent(address)}/score`,
-      { cache: "no-store" }
+      `https://api.passport.xyz/v2/stamps/${encodeURIComponent(scorerId)}/score/${encodeURIComponent(address)}`,
+      {
+        headers: {
+          "X-API-Key": apiKey,
+          accept: "application/json",
+        },
+        cache: "no-store",
+      }
     );
-    if (!r.ok) return fallback;
+    if (!r.ok) return fallback("fetch_failed");
     const j = (await r.json()) as {
       score?: number | string;
       passing_score?: boolean;
@@ -67,7 +88,7 @@ export async function scanPassport(address: string): Promise<PassportSummary> {
       last_updated: j.last_score_timestamp ?? null,
     };
   } catch {
-    return fallback;
+    return fallback("fetch_failed");
   }
 }
 
