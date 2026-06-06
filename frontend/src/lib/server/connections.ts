@@ -13,7 +13,7 @@ import { accounts } from "@reputon/db/schema";
 
 const db = getDb();
 
-export type ProviderId = "github" | "google" | "twitter";
+export type ProviderId = "github" | "google" | "twitter" | "telegram";
 
 export type ConnectedAccount = {
   provider: ProviderId;
@@ -25,24 +25,42 @@ export type ConnectedAccount = {
   expiresAt: number | null;
 };
 
-/** Returns all OAuth connections for the user. */
+const PROVIDER_IDS: readonly ProviderId[] = ["github", "google", "twitter", "telegram"];
+
+/** Returns all OAuth + Login Widget connections for the user. */
 export async function getConnections(userId: string): Promise<ConnectedAccount[]> {
   const rows = await db.select().from(accounts).where(eq(accounts.userId, userId));
   return rows
     .filter((r): r is typeof r & { provider: ProviderId } =>
-      ["github", "google", "twitter"].includes(r.provider)
+      (PROVIDER_IDS as readonly string[]).includes(r.provider)
     )
     .map((r) => ({
       provider: r.provider,
       providerAccountId: r.providerAccountId,
-      // Auth.js doesn't store the handle directly; for GitHub we use the
-      // providerAccountId (numeric user id) and the access token will give
-      // us the handle on demand. Callers that need the username should
-      // call `githubHandle(userId)` or use the per-provider scan helpers.
-      handle: null,
+      // For Telegram we stashed the username in id_token on insert. For
+      // GitHub we leave handle null and let callers resolve via the
+      // per-provider helper (which calls /user with the access token).
+      handle:
+        r.provider === "telegram"
+          ? (r as { id_token?: string | null }).id_token ?? null
+          : null,
       accessToken: (r as { access_token?: string | null }).access_token ?? null,
       expiresAt: (r as { expires_at?: number | null }).expires_at ?? null,
     }));
+}
+
+/** Resolves the cached handle for a single provider, if any. */
+export async function getHandle(userId: string, provider: ProviderId): Promise<string | null> {
+  const [row] = await db
+    .select()
+    .from(accounts)
+    .where(and(eq(accounts.userId, userId), eq(accounts.provider, provider)))
+    .limit(1);
+  if (!row) return null;
+  if (provider === "telegram") {
+    return (row as { id_token?: string | null }).id_token ?? null;
+  }
+  return null;
 }
 
 /** Resolves a user's GitHub handle by hitting /user with their token. */

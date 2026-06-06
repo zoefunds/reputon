@@ -133,12 +133,16 @@ export function ConnectorCards() {
         title="Telegram"
         sub="Verifies your Telegram identity via the official Login Widget."
         right={
-          !conn?.providers.telegram.configured ? (
+          conn?.providers.telegram.connected ? (
+            <Pill variant="success">
+              @{conn.providers.telegram.handle ?? "linked"}
+            </Pill>
+          ) : !conn?.providers.telegram.configured ? (
             <Pill variant="muted">Provider not configured</Pill>
           ) : null
         }
         body={
-          conn?.providers.telegram.configured ? (
+          conn?.providers.telegram.configured && !conn?.providers.telegram.connected ? (
             <div className="overflow-x-auto">
               <TelegramLogin onLinked={refresh} />
             </div>

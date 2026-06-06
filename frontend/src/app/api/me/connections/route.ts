@@ -9,25 +9,41 @@
  */
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/server/user";
-import { hasConnection, githubHandle } from "@/lib/server/connections";
+import { hasConnection, githubHandle, getHandle } from "@/lib/server/connections";
 import { enabledProviders } from "../../../../../auth";
 
 export async function GET() {
   const u = await getCurrentUser();
   if (!u) return NextResponse.json({ error: { message: "unauthorized" } }, { status: 401 });
 
-  const [github, twitter] = await Promise.all([
+  const [githubLinked, twitterLinked, telegramLinked] = await Promise.all([
     hasConnection(u.id, "github"),
     hasConnection(u.id, "twitter"),
+    hasConnection(u.id, "telegram"),
   ]);
-  const gh = github ? await githubHandle(u.id) : null;
+  const [gh, tgHandle] = await Promise.all([
+    githubLinked ? githubHandle(u.id) : Promise.resolve(null),
+    telegramLinked ? getHandle(u.id, "telegram") : Promise.resolve(null),
+  ]);
 
   return NextResponse.json({
     wallet: u.primaryWallet?.address ?? null,
     providers: {
-      github: { configured: enabledProviders.github, connected: github, handle: gh?.login ?? null },
-      twitter: { configured: enabledProviders.twitter, connected: twitter, handle: null },
-      telegram: { configured: enabledProviders.telegram, connected: false, handle: null },
+      github: {
+        configured: enabledProviders.github,
+        connected: githubLinked,
+        handle: gh?.login ?? null,
+      },
+      twitter: {
+        configured: enabledProviders.twitter,
+        connected: twitterLinked,
+        handle: null,
+      },
+      telegram: {
+        configured: enabledProviders.telegram,
+        connected: telegramLinked,
+        handle: tgHandle,
+      },
     },
   });
 }
