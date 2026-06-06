@@ -3,7 +3,8 @@ import Link from "next/link";
 import { Container } from "@/components/ui/container";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/dashboard/EmptyState";
-import { TierGrid, TIERS } from "@/components/nft/TierGrid";
+import { TierGrid } from "@/components/nft/TierGrid";
+import { TIERS } from "@/components/nft/tiers";
 import { requireUser } from "@/lib/server/user";
 import { onchain } from "@/lib/server/onchain";
 
@@ -12,9 +13,11 @@ export const dynamic = "force-dynamic";
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4001";
 
 /**
- * Asks the contract whether a given tier is currently self-mintable
- * (set_self_mint_allowed). The owner toggles this — anyone else only
- * sees the tiers they're allowed to mint.
+ * Asks the backend whether a given tier is currently self-mintable
+ * (is_self_mint_allowed on the contract). Any failure — bad env, 5xx,
+ * malformed JSON — returns false so the page still renders the rest
+ * of the tier ladder with a "not yet enabled by protocol" state for
+ * the broken tiers instead of crashing the whole page.
  */
 async function isSelfMintAllowed(tier: string): Promise<boolean> {
   try {
@@ -23,8 +26,8 @@ async function isSelfMintAllowed(tier: string): Promise<boolean> {
       { cache: "no-store" }
     );
     if (!r.ok) return false;
-    const j = (await r.json()) as { allowed?: boolean };
-    return Boolean(j.allowed);
+    const j = (await r.json().catch(() => null)) as { allowed?: boolean } | null;
+    return Boolean(j?.allowed);
   } catch {
     return false;
   }
@@ -34,12 +37,19 @@ export default async function NftsPage() {
   const user = await requireUser();
   const address = user.primaryWallet?.address;
 
-  // Parallel fetch: score (for tier gating), owned credentials, and
-  // per-tier self-mint flags from the contract.
+  // Each branch is wrapped in catch-and-default so a single failed
+  // upstream call (e.g. backend cold-start) never takes the whole
+  // credentials page down.
   const [score, owned, allowedFlags] = await Promise.all([
-    address ? onchain.score(address) : Promise.resolve(null),
-    address ? onchain.credentialsOf(address) : Promise.resolve(null),
-    Promise.all(TIERS.map((t) => isSelfMintAllowed(t.id).then((ok) => [t.id, ok] as const))),
+    address ? onchain.score(address).catch(() => null) : Promise.resolve(null),
+    address ? onchain.credentialsOf(address).catch(() => null) : Promise.resolve(null),
+    Promise.all(
+      TIERS.map((t) =>
+        isSelfMintAllowed(t.id)
+          .then((ok) => [t.id, ok] as const)
+          .catch(() => [t.id, false] as const)
+      )
+    ),
   ]);
   const data = owned?.credentials ?? [];
   const enabledForSelfMint = new Set(allowedFlags.filter(([, ok]) => ok).map(([id]) => id));

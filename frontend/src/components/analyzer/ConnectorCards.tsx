@@ -349,9 +349,9 @@ const TG_BOT_NAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME ?? "";
  * HMAC verification + persistence.
  */
 function TelegramLogin({ onLinked }: { onLinked: () => void }) {
-  // Stash a global callback the widget can call. Hooks must be called
-  // unconditionally, so we register even when TG_BOT_NAME is missing —
-  // the widget script just never loads in that case.
+  // Register the global callback Telegram will invoke after login. Hooks
+  // must be called unconditionally, so this runs even when TG_BOT_NAME
+  // is missing — the widget just never loads in that case.
   useEffect(() => {
     if (!TG_BOT_NAME) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -369,6 +369,34 @@ function TelegramLogin({ onLinked }: { onLinked: () => void }) {
     };
   }, [onLinked]);
 
+  // Inject the widget script with innerHTML on first mount. We do NOT use
+  // a React <script> element (React refuses to execute them) and we do
+  // NOT use document.createElement + appendChild with async=true, because
+  // Telegram's widget reads document.currentScript at load to know where
+  // to place the iframe, and currentScript is null for async-appended
+  // scripts in some browsers. innerHTML injection executes synchronously
+  // and gives the widget a real currentScript reference.
+  useEffect(() => {
+    if (!TG_BOT_NAME) return;
+    const slot = document.getElementById("tg-login-slot");
+    if (!slot || slot.dataset.mounted === "1") return;
+    slot.dataset.mounted = "1";
+    slot.innerHTML =
+      `<script async src="https://telegram.org/js/telegram-widget.js?22" ` +
+      `data-telegram-login="${TG_BOT_NAME}" ` +
+      `data-size="medium" ` +
+      `data-onauth="onTelegramAuth(user)" ` +
+      `data-request-access="write"></script>`;
+    // innerHTML doesn't execute injected <script> tags. Recreate them so
+    // they actually run.
+    Array.from(slot.querySelectorAll("script")).forEach((old) => {
+      const fresh = document.createElement("script");
+      for (const a of Array.from(old.attributes)) fresh.setAttribute(a.name, a.value);
+      fresh.text = old.text;
+      old.replaceWith(fresh);
+    });
+  }, []);
+
   if (!TG_BOT_NAME) {
     return (
       <span className="text-[11px] text-accent">
@@ -377,20 +405,5 @@ function TelegramLogin({ onLinked }: { onLinked: () => void }) {
     );
   }
 
-  return (
-    <div
-      ref={(node) => {
-        if (!node || node.dataset.mounted === "1") return;
-        node.dataset.mounted = "1";
-        const s = document.createElement("script");
-        s.async = true;
-        s.src = "https://telegram.org/js/telegram-widget.js?22";
-        s.setAttribute("data-telegram-login", TG_BOT_NAME);
-        s.setAttribute("data-size", "medium");
-        s.setAttribute("data-onauth", "onTelegramAuth(user)");
-        s.setAttribute("data-request-access", "write");
-        node.appendChild(s);
-      }}
-    />
-  );
+  return <div id="tg-login-slot" />;
 }
