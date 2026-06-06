@@ -49,7 +49,7 @@ export async function POST(req: Request) {
  { status: 400 }
  );
  }
- const bundle = await buildBundle(u.primaryWallet.address, parsed.data as SignalInputs);
+ const bundle = await buildBundle(u.primaryWallet.address, parsed.data as SignalInputs, u.id);
  const signalsJson = compactSignalsJson(bundle as unknown as Record<string, unknown>);
  const [row] = await db
  .insert(evaluationJobs)

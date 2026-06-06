@@ -2,21 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
- Github,
- Vote,
- Sparkles,
- Plus,
- X,
  Loader2,
  CheckCircle2,
- AlertTriangle,
  PlayCircle,
+ AlertTriangle,
 } from "lucide-react";
 import { useAccount } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { TrustBadge } from "@/components/dashboard/TrustBadge";
 import { useGenLayerWrite } from "@/lib/genlayer/useGenLayerWrite";
 import { addr } from "@/lib/genlayer/clientWrite";
+import { ConnectorCards } from "./ConnectorCards";
 
 const REPUTON_ADDRESS = (process.env.NEXT_PUBLIC_REPUTON_CONTRACT_ADDRESS ?? "") as `0x${string}`;
 
@@ -55,9 +51,9 @@ type Job = {
 };
 
 export function Analyzer() {
- const [githubHandle, setGithubHandle] = useState("");
- const [governance, setGovernance] = useState<Governance[]>([]);
- const [contributions, setContributions] = useState<Contribution[]>([]);
+ // Signals are sourced server-side from connected accounts + wallet
+ // scans. The only freeform inputs left are the analyst's `notes` and
+ // an optional informational endorsements count.
  const [endorsementsCount, setEndorsementsCount] = useState(0);
  const [notes, setNotes] = useState("");
 
@@ -88,9 +84,6 @@ export function Analyzer() {
  method: "POST",
  headers: { "Content-Type": "application/json" },
  body: JSON.stringify({
- github_handle: githubHandle || undefined,
- governance,
- contributions,
  endorsements_count: endorsementsCount,
  notes: notes || undefined,
  }),
@@ -125,9 +118,6 @@ export function Analyzer() {
  method: "POST",
  headers: { "Content-Type": "application/json" },
  body: JSON.stringify({
- github_handle: githubHandle || undefined,
- governance,
- contributions,
  endorsements_count: endorsementsCount,
  notes: notes || undefined,
  }),
@@ -209,170 +199,15 @@ export function Analyzer() {
  return (
  <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr]">
  <div className="space-y-6">
- {/* GitHub */}
- <Card title="GitHub" icon={<Github className="h-4 w-4" />}>
- <label className="block">
- <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-accent">
- Handle
- </span>
- <input
- type="text"
- value={githubHandle}
- onChange={(e) => setGithubHandle(e.target.value)}
- placeholder="e.g. torvalds"
- className="mt-1.5 block w-full rounded-md border border-border bg-background px-3 py-2 text-[14px] text-foreground placeholder:text-accent/70 focus:border-foreground focus:outline-none"
- />
- <span className="mt-1 block text-[12px] text-accent">
- Reputon fetches your last 5 repos + 15 PRs and bundles them as signals.
- </span>
- </label>
- </Card>
-
- {/* Governance */}
- <Card
- title="Governance"
- icon={<Vote className="h-4 w-4" />}
- action={
- <Button
- variant="ghost"
- size="sm"
- onClick={() =>
- setGovernance([
- ...governance,
- { dao: "", role: "voter", proposal_ids: [] },
- ])
- }
- >
- <Plus className="h-3.5 w-3.5" />
- Add row
- </Button>
- }
- >
- {governance.length === 0 ? (
- <p className="text-[13px] text-accent">No governance entries yet.</p>
- ) : (
- <ul className="space-y-3">
- {governance.map((g, i) => (
- <li
- key={i}
- className="grid grid-cols-1 gap-2 rounded-md border border-border bg-background p-3 sm:grid-cols-[1fr_140px_auto]"
- >
- <input
- placeholder="DAO name"
- value={g.dao}
- onChange={(e) =>
- setGovernance(
- governance.map((x, j) => (i === j ? { ...x, dao: e.target.value } : x))
- )
- }
- className="rounded border border-border bg-background px-2 py-1 text-[13px]"
- />
- <select
- value={g.role}
- onChange={(e) =>
- setGovernance(
- governance.map((x, j) =>
- i === j ? { ...x, role: e.target.value as "voter" | "author" } : x
- )
- )
- }
- className="rounded border border-border bg-background px-2 py-1 text-[13px]"
- >
- <option value="voter">voter</option>
- <option value="author">author</option>
- </select>
- <button
- onClick={() => setGovernance(governance.filter((_, j) => j !== i))}
- className="text-accent hover:text-error"
- aria-label="remove"
- >
- <X className="h-4 w-4" />
- </button>
- </li>
- ))}
- </ul>
- )}
- </Card>
-
- {/* Contributions */}
- <Card
- title="Contributions"
- icon={<Sparkles className="h-4 w-4" />}
- action={
- <Button
- variant="ghost"
- size="sm"
- onClick={() =>
- setContributions([
- ...contributions,
- { source: "github", title: "", url: "" },
- ])
- }
- >
- <Plus className="h-3.5 w-3.5" />
- Add row
- </Button>
- }
- >
- {contributions.length === 0 ? (
- <p className="text-[13px] text-accent">No contributions yet.</p>
- ) : (
- <ul className="space-y-3">
- {contributions.map((c, i) => (
- <li
- key={i}
- className="grid grid-cols-1 gap-2 rounded-md border border-border bg-background p-3 sm:grid-cols-[140px_1fr_auto]"
- >
- <select
- value={c.source}
- onChange={(e) =>
- setContributions(
- contributions.map((x, j) =>
- i === j ? { ...x, source: e.target.value as Contribution["source"] } : x
- )
- )
- }
- className="rounded border border-border bg-background px-2 py-1 text-[13px]"
- >
- {(["github", "content", "community", "education", "protocol"] as const).map(
- (s) => (
- <option key={s} value={s}>
- {s}
- </option>
- )
- )}
- </select>
- <input
- placeholder="Title (and optional URL on the next field)"
- value={c.title}
- onChange={(e) =>
- setContributions(
- contributions.map((x, j) => (i === j ? { ...x, title: e.target.value } : x))
- )
- }
- className="rounded border border-border bg-background px-2 py-1 text-[13px]"
- />
- <button
- onClick={() => setContributions(contributions.filter((_, j) => j !== i))}
- className="text-accent hover:text-error"
- aria-label="remove"
- >
- <X className="h-4 w-4" />
- </button>
- <input
- placeholder="URL (optional)"
- value={c.url ?? ""}
- onChange={(e) =>
- setContributions(
- contributions.map((x, j) => (i === j ? { ...x, url: e.target.value } : x))
- )
- }
- className="rounded border border-border bg-background px-2 py-1 text-[12px] sm:col-span-3"
- />
- </li>
- ))}
- </ul>
- )}
+ {/* Verified sources — every signal in the bundle below is pulled
+     server-side from a connected account or a public wallet scan,
+     so users can't fake their inputs. */}
+ <Card title="Sources" icon={<CheckCircle2 className="h-4 w-4" />}>
+ <p className="mb-3 text-[12.5px] text-accent">
+  Reputon only scores verified signals — connect each source you
+  want included in your bundle.
+ </p>
+ <ConnectorCards />
  </Card>
 
  {/* Notes */}

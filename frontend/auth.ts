@@ -8,6 +8,7 @@
 
 import NextAuth, { type DefaultSession, type NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
+import GitHub from "next-auth/providers/github";
 import Nodemailer from "next-auth/providers/nodemailer";
 import Credentials from "next-auth/providers/credentials";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
@@ -32,6 +33,21 @@ if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
  Google({
  clientId: process.env.AUTH_GOOGLE_ID,
  clientSecret: process.env.AUTH_GOOGLE_SECRET,
+ allowDangerousEmailAccountLinking: true,
+ })
+ );
+}
+
+// GitHub OAuth — used by the analyzer's "Connect GitHub" flow so the
+// handle is verified rather than typed in. read:user gives us username +
+// follower count + bio, public_repo lets us iterate their public PRs and
+// repos with their own token (avoids GitHub's anonymous rate limits).
+if (process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET) {
+ providers.push(
+ GitHub({
+ clientId: process.env.AUTH_GITHUB_ID,
+ clientSecret: process.env.AUTH_GITHUB_SECRET,
+ authorization: { params: { scope: "read:user public_repo" } },
  allowDangerousEmailAccountLinking: true,
  })
  );
@@ -181,5 +197,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth(config);
 export const enabledProviders = {
  google: Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET),
  email: Boolean(process.env.SMTP_HOST && process.env.AUTH_EMAIL_FROM),
+ github: Boolean(process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET),
+ twitter: Boolean(process.env.AUTH_TWITTER_ID && process.env.AUTH_TWITTER_SECRET),
+ telegram: Boolean(process.env.TELEGRAM_BOT_TOKEN),
  wallet: true,
 };

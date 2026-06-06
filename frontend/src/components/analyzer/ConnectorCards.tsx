@@ -1,0 +1,312 @@
+"use client";
+
+/**
+ * Connector grid that replaces the analyzer's old free-text inputs.
+ *
+ * One card per source. Each card shows:
+ *   - the source name + a one-line description
+ *   - the connection state (configured / connected / coming-soon)
+ *   - a primary action button
+ *
+ * The actual signal pull happens server-side when the user hits
+ * "Run evaluation" — these cards just record intent + verify identity
+ * up-front so the bundle is sourced from real, verified inputs.
+ */
+
+import { useCallback, useEffect, useState } from "react";
+import { signIn } from "next-auth/react";
+import {
+  Github,
+  Twitter,
+  Send,
+  ShieldCheck,
+  Vote,
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+} from "lucide-react";
+
+type Providers = {
+  github: { configured: boolean; connected: boolean; handle: string | null };
+  twitter: { configured: boolean; connected: boolean; handle: string | null };
+  telegram: { configured: boolean; connected: boolean; handle: string | null };
+};
+
+type ConnectionsResponse = {
+  wallet: string | null;
+  providers: Providers;
+};
+
+type CredentialsPreview = {
+  ok: boolean;
+  score: number | null;
+  stamps: number;
+  passing: boolean;
+};
+
+type ProtocolsPreview = {
+  ok: boolean;
+  vote_count: number;
+  spaces: { id: string; name: string; votes: number }[];
+};
+
+export function ConnectorCards() {
+  const [conn, setConn] = useState<ConnectionsResponse | null>(null);
+  const [credentials, setCredentials] = useState<CredentialsPreview | null>(null);
+  const [protocols, setProtocols] = useState<ProtocolsPreview | null>(null);
+  const [scanning, setScanning] = useState<"credentials" | "protocols" | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const r = await fetch("/api/me/connections", { cache: "no-store" });
+      if (r.ok) setConn((await r.json()) as ConnectionsResponse);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  async function scan(source: "credentials" | "protocols") {
+    setScanning(source);
+    try {
+      const r = await fetch(`/api/me/connections/scan?source=${source}`, { cache: "no-store" });
+      if (!r.ok) return;
+      const j = await r.json();
+      if (source === "credentials") setCredentials(j.passport ?? null);
+      if (source === "protocols") setProtocols(j.snapshot ?? null);
+    } finally {
+      setScanning(null);
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      {/* GitHub — OAuth-verified */}
+      <Card
+        icon={<Github className="h-4 w-4" />}
+        title="GitHub"
+        sub="Verified developer activity — PRs, repos, follower graph."
+        right={
+          conn?.providers.github.connected ? (
+            <Pill variant="success">
+              @{conn.providers.github.handle ?? "linked"}
+            </Pill>
+          ) : conn?.providers.github.configured ? (
+            <ActionBtn
+              onClick={() => signIn("github", { callbackUrl: "/dashboard/analyzer" })}
+            >
+              Connect GitHub
+            </ActionBtn>
+          ) : (
+            <Pill variant="muted">Provider not configured</Pill>
+          )
+        }
+      />
+
+      {/* Twitter / X — identity-only on the free tier */}
+      <Card
+        icon={<Twitter className="h-4 w-4" />}
+        title="X (Twitter)"
+        sub="Verifies handle + follower count. Tweet history requires paid Twitter tier."
+        right={
+          conn?.providers.twitter.connected ? (
+            <Pill variant="success">@{conn.providers.twitter.handle ?? "linked"}</Pill>
+          ) : conn?.providers.twitter.configured ? (
+            <ActionBtn
+              onClick={() => signIn("twitter", { callbackUrl: "/dashboard/analyzer" })}
+            >
+              Connect X
+            </ActionBtn>
+          ) : (
+            <Pill variant="muted">Provider not configured</Pill>
+          )
+        }
+      />
+
+      {/* Telegram — Login Widget */}
+      <Card
+        icon={<Send className="h-4 w-4" />}
+        title="Telegram"
+        sub="Verifies your Telegram identity via the official Login Widget."
+        right={
+          conn?.providers.telegram.configured ? (
+            <ActionBtn disabled>Telegram Login (soon)</ActionBtn>
+          ) : (
+            <Pill variant="muted">Provider not configured</Pill>
+          )
+        }
+      />
+
+      {/* Credentials — Gitcoin Passport */}
+      <Card
+        icon={<ShieldCheck className="h-4 w-4" />}
+        title="Credentials"
+        sub="Gitcoin Passport humanity score + stamps attached to your wallet."
+        right={
+          <ActionBtn onClick={() => scan("credentials")} disabled={scanning === "credentials"}>
+            {scanning === "credentials" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : null}
+            {credentials?.ok ? "Re-scan" : "Scan wallet"}
+          </ActionBtn>
+        }
+        body={
+          credentials ? (
+            credentials.ok ? (
+              <ScanResult
+                label={`Score ${credentials.score ?? "—"} · ${credentials.stamps} stamps`}
+                ok={credentials.passing}
+                okLabel="Passing humanity threshold"
+                offLabel="Below humanity threshold"
+              />
+            ) : (
+              <Hint>Passport could not be read for this wallet.</Hint>
+            )
+          ) : null
+        }
+      />
+
+      {/* Protocols — Snapshot governance */}
+      <Card
+        icon={<Vote className="h-4 w-4" />}
+        title="Protocols"
+        sub="Snapshot governance votes across DAOs, scanned from your connected wallet."
+        right={
+          <ActionBtn onClick={() => scan("protocols")} disabled={scanning === "protocols"}>
+            {scanning === "protocols" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : null}
+            {protocols?.ok ? "Re-scan" : "Scan wallet"}
+          </ActionBtn>
+        }
+        body={
+          protocols ? (
+            protocols.ok ? (
+              <ScanResult
+                label={`${protocols.vote_count} votes · ${protocols.spaces.length} DAOs`}
+                ok={protocols.vote_count > 0}
+                okLabel={protocols.spaces.slice(0, 3).map((s) => s.name).join(" · ")}
+                offLabel="No Snapshot activity found"
+              />
+            ) : (
+              <Hint>Snapshot could not be read for this wallet.</Hint>
+            )
+          ) : null
+        }
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Atomic UI pieces
+// ---------------------------------------------------------------------------
+
+function Card({
+  icon,
+  title,
+  sub,
+  right,
+  body,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  sub: string;
+  right: React.ReactNode;
+  body?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-soft">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2">
+          <span className="mt-[2px] text-foreground">{icon}</span>
+          <div className="space-y-0.5">
+            <p className="font-display text-[14px] font-semibold tracking-tight text-foreground">
+              {title}
+            </p>
+            <p className="text-[12px] leading-snug text-accent">{sub}</p>
+          </div>
+        </div>
+        <div className="shrink-0">{right}</div>
+      </div>
+      {body && <div className="mt-3">{body}</div>}
+    </div>
+  );
+}
+
+function ActionBtn({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
+function Pill({
+  children,
+  variant,
+}: {
+  children: React.ReactNode;
+  variant: "success" | "muted";
+}) {
+  const cls =
+    variant === "success"
+      ? "border-success/30 bg-success/10 text-success"
+      : "border-border bg-background text-accent";
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border ${cls} px-2 py-1 text-[11px]`}>
+      {variant === "success" && <CheckCircle2 className="h-3 w-3" />}
+      {children}
+    </span>
+  );
+}
+
+function ScanResult({
+  label,
+  ok,
+  okLabel,
+  offLabel,
+}: {
+  label: string;
+  ok: boolean;
+  okLabel: string;
+  offLabel: string;
+}) {
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-border/70 bg-background px-3 py-2 text-[12px]">
+      {ok ? (
+        <CheckCircle2 className="mt-[2px] h-3.5 w-3.5 text-success" />
+      ) : (
+        <AlertTriangle className="mt-[2px] h-3.5 w-3.5 text-accent" />
+      )}
+      <div>
+        <p className="font-medium text-foreground">{label}</p>
+        <p className="text-accent">{ok ? okLabel : offLabel}</p>
+      </div>
+    </div>
+  );
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="rounded-md border border-dashed border-border/70 bg-background px-3 py-2 text-[12px] text-accent">
+      {children}
+    </p>
+  );
+}
