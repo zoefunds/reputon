@@ -31,8 +31,11 @@ app.get("/", async (c) => {
   // configured" so prod health stays "ok" instead of flapping to
   // "degraded" forever for an unused feature.
   const cfg = env();
+  const sentinelKeys = new Set(["", "reputon", "disabled", "none", "off"]);
+  const hasRealCreds =
+    !sentinelKeys.has(cfg.S3_ACCESS_KEY) && !sentinelKeys.has(cfg.S3_SECRET_KEY);
   const usingDefaultEndpoint = cfg.S3_ENDPOINT === "http://localhost:9000";
-  if (!usingDefaultEndpoint) {
+  if (!usingDefaultEndpoint && hasRealCreds) {
     try {
       const ok = await storage().bucketExists(cfg.S3_BUCKET);
       checks.storage = { ok };
