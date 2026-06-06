@@ -16,15 +16,32 @@ Deployed contracts (Genlayer StudioNet, chain id `61999`):
 
 | Contract            | Purpose                          | Address                                       |
 | ------------------- | -------------------------------- | --------------------------------------------- |
-| `reputon.py`        | Profiles, scores, history, endorsements, AI evaluation | `0x179DA7e9BA6265A76ba2C7c57ab6C2c4d12941E6` |
-| `reputon_nft.py`    | Soulbound credential NFTs        | `0x1E9EC43963b7BBD574a41AcF8e37163fCcA24a2F`  |
-| `sybil_oracle.py`   | LLM-backed sybil detection       | `0x2ff462D033B22A77b6502D65ccE4DFa180D8865f`  |
+| `reputon.py`        | Profiles, scores, history, endorsements, AI evaluation | `0xC64180D391C722CA461c3e492ef07ed084e0f747` |
+| `reputon_nft.py`    | Soulbound credential NFTs        | `0x5116CfDB52bd96567777f86ac8d213D0715016C6`  |
+| `sybil_oracle.py`   | LLM-backed sybil detection       | `0xe7E900542b54BeF274bE90e999BF6375C9463804`  |
 
-> **Signing model.** As of the latest release, **every on-chain write is
-> signed by the user's connected wallet** — never the protocol. `mint_self`
-> on the NFT contract and `evaluate_and_update` on the reputation contract
-> are both initiated client-side via RainbowKit + wagmi. The backend's
-> signer is reserved for admin operations and webhook fanout only.
+> **Signing model.** Every on-chain write is signed by the user's own wallet
+> via RainbowKit + wagmi — `mint_self`, `evaluate_and_update`, and
+> `add_endorsement` all originate from the connected wallet. The wallet is
+> auto-prompted to add and switch to GenLayer Studionet on first action.
+> The protocol's signer key is reserved for admin operations (e.g.
+> `set_self_mint_allowed`) and webhook fanout — it never appears in the
+> user path.
+>
+> **Scoring rules.** Re-evaluations are tightly governed so the score
+> reflects real change, not LLM noise:
+>
+> - **High-water mark.** `profile.score` is monotonic — re-running the
+>   analyzer can only increase it. Every actual LLM-returned number is
+>   still preserved in `history_json` for audit, but the public score
+>   never drops.
+> - **Deterministic on unchanged signals.** The contract stores
+>   `last_signals_hash` and refuses to re-run the LLM if the new bundle
+>   hashes to the same value. Connect or update a source to re-score.
+> - **30-day cooldown.** Even with changed signals, a wallet can only
+>   trigger one successful on-chain evaluation every 30 days, enforced
+>   by the Vercel route handler against DB timestamps (since the SDK
+>   doesn't expose `gl.block.timestamp`).
 
 ---
 
@@ -47,35 +64,43 @@ Deployed contracts (Genlayer StudioNet, chain id `61999`):
 
 ## What Reputon is
 
-A self-hosted, terminal-only protocol that produces a portable on-chain
-reputation score (0 to 1000) for any EVM wallet. Reputon is built around
-three Genlayer Intelligent Contracts that together:
+A self-hosted protocol that produces a portable on-chain reputation score
+(0 to 1000) for any EVM wallet. Reputon is built around three Genlayer
+Intelligent Contracts that together:
 
-1. Register and maintain a per-wallet profile.
-2. Run AI evaluations on supplied signal bundles (GitHub activity, governance
-   participation, contributions, endorsements). The LLM call runs under the
-   **Genlayer equivalence principle**, so every validator independently
-   re-derives a comparable score, making AI outputs safe to commit on-chain.
-3. Mint soulbound credential NFTs for milestones.
-4. Detect sybil and bot-like behavior with a separate LLM-backed oracle.
+1. **Register and score** a per-wallet profile from a bundle of **verified
+   signals** — GitHub activity (via OAuth), Snapshot governance votes
+   (scanned from the wallet), Gitcoin Passport stamps, Tally DAO
+   delegations, plus optional Telegram and X identity verification. The
+   LLM call runs under the **Genlayer equivalence principle**, so every
+   validator independently re-derives a comparable score.
+2. **Mint soulbound credential NFTs** across a 5-tier ladder — Genesis
+   (anyone), Bronze (≥250), Silver (≥500), Gold (≥750), Eternal (≥950).
+3. **Endorse other wallets** with a weighted vouch. Endorsements live in
+   flat composite-key storage on-chain and are bidirectionally queryable.
+4. **Detect sybil / bot-like behavior** with a separate LLM-backed oracle.
 
 Around those contracts, Reputon ships a full product: marketing site,
-authenticated dashboard, contribution analyzer, admin console, a Stripe-style
-public REST API with HMAC-signed outbound webhooks, scope-gated API keys, and
-production-grade security.
+authenticated dashboard, contribution analyzer (with verified connector
+cards instead of free-text inputs), endorsement flows, admin console, a
+public REST API with HMAC-signed outbound webhooks, scope-gated API keys,
+and production-grade security.
 
 ## How it works
 
 ```
-                 1. user submits signals
-            (GitHub handle, DAO involvement, etc.)
+              1. user connects verified sources from the analyzer
+              (GitHub OAuth, X OAuth, Telegram Login Widget,
+               Snapshot wallet scan, Gitcoin Passport scan, Tally)
                           |
                           v
               +-----------------------+
-              |  Reputon backend      |
-              |  - assembles bundle   |
-              |  - compacts to <4 KB  |
-              |  - opens job row      |
+              |  Vercel route handler |
+              |  - hash 30-day cool-  |
+              |    down check        |
+              |  - assemble bundle    |
+              |  - compact to <4 KB   |
+              |  - return signals_json|
               +-----------+-----------+
                           |
               2. user signs evaluate_and_update from their own
@@ -85,32 +110,40 @@ production-grade security.
                           v
               +-----------------------+
               |  Reputon contract     |
-              |  evaluate_and_update  |
-              |   gl.eq_principle    |
-              |   .prompt_comparative |
+              |  - hash check: skip   |
+              |    if signals unchanged
+              |  - eq.prompt_comparative
+              |  - high-water mark on score
               +-----------+-----------+
                           |
-              3. validators each run the LLM and must agree
-                 the output is JSON with a numeric score field
+              3. validators each run the LLM. Equivalence requires
+                 JSON output with a numeric score field — actual
+                 number can differ; the leader's run wins.
                           |
                           v
               +-----------------------+
               |  on-chain state       |
-              |  score, confidence,   |
-              |  category, explanation,
-              |  breakdown, history   |
+              |  score (monotonic),   |
+              |  confidence, category,|
+              |  explanation, breakdown,
+              |  history_json,         |
+              |  last_signals_hash    |
               +-----------+-----------+
                           |
-              4. backend poller sees the on-chain score advance,
-                 marks the job done, and fans `score.updated`
-                 webhooks out to subscribers
+              4. backend poller sees the on-chain evaluation count
+                 advance, marks the DB job done, and fans
+                 `score.updated` webhooks to subscribers
 ```
 
-Reads are always direct from the contract (or a 15-second Redis cache).
-Writes are signed by the **user's own wallet** — there is no backend
-signer in the user path. Each on-chain action triggers exactly one
-wallet popup, and the wallet is auto-prompted to switch to GenLayer
-Studionet the moment a user connects.
+Reads are always direct from the contract (with a 15-second Redis cache
+on the backend). User-personalised reads on the dashboard bypass the
+Next.js data cache (`cache: "no-store"`) so contract redeploys can't
+leave stale data on the UI.
+
+Writes are signed by the **user's own wallet** — no backend signer in
+the user path. Each on-chain action triggers exactly one wallet popup,
+and the wallet is auto-prompted to switch to GenLayer Studionet the
+moment a user connects.
 
 ## Architecture
 
@@ -150,11 +183,20 @@ Architecture detail in [`docs/architecture.md`](./docs/architecture.md).
 - **Next.js 15** (App Router, React 19, strict TypeScript)
 - **Tailwind CSS 3.4** for styling, theme tokens in `globals.css`
 - **shadcn/ui** style primitives (Button, Container, etc.)
-- **Auth.js v5** with three providers: Wallet (SIWE / EIP 4361), Google OAuth,
-  Email magic links (Nodemailer)
-- **Recharts** for score trend visualisation
-- **genlayer-js** for on-chain reads and (when a signer is set) writes
-- **Lucide** icons, **Inter** + **JetBrains Mono** via `next/font`
+- **Auth.js v5** sign-in via wallet (SIWE / EIP-4361) only; sign-in page
+  is wallet-only. Per-user OAuth connectors (GitHub, X/Twitter) live in
+  the `accounts` table for analyzer signal verification.
+- **RainbowKit + wagmi 2** for the wallet UX (Connect button, chain
+  switch, popup). **viem** under the hood; the GenLayer Studionet chain
+  is registered in `lib/wagmi.ts` (chain id `61999`).
+- **genlayer-js** for both reads and client-signed writes. We build the
+  GenLayer-internal calldata via the public `abi.calldata` exports and
+  submit through `walletClient.writeContract` on the consensus contract
+  — see `lib/genlayer/clientWrite.ts`.
+- **Telegram Login Widget** (oauth.telegram.org popup) with HMAC-SHA256
+  verification in `/api/me/connections/telegram`.
+- **Recharts** for score trend visualisation.
+- **Lucide** icons, **Inter** + **JetBrains Mono** via `next/font`.
 
 ### Backend
 - **Hono** on Node 20, ESM only, tsx as runtime
@@ -285,39 +327,58 @@ Base URL in production: `https://reputon-backend.fly.dev`.
 
 ```bash
 # Score for any wallet
-curl "https://reputon-backend.fly.dev/v1/api/score?address=0xada..."
+curl "https://reputon-backend.fly.dev/v1/api/score?address=0x6f0b4ce7a1872db132b2f6b7743defb30eba698a"
 
-# Full profile
-curl "https://reputon-backend.fly.dev/v1/api/profile?address=0xada..."
+# Full profile (incl. evaluation count and last_signals_hash)
+curl "https://reputon-backend.fly.dev/v1/api/profile?address=0x6f0b..."
 
-# Newest-first score history
-curl "https://reputon-backend.fly.dev/v1/api/history?address=0xada...&limit=20"
+# Newest-first score history (each entry has score, confidence,
+# category, delta, explanation, breakdown — created_at is always
+# 0 because the SDK doesn't expose gl.block.timestamp)
+curl "https://reputon-backend.fly.dev/v1/api/history?address=0x6f0b...&limit=20"
 
-# Endorsements (given or received)
-curl "https://reputon-backend.fly.dev/v1/api/endorsements?address=0xada...&direction=received"
+# Endorsements
+curl "https://reputon-backend.fly.dev/v1/api/endorsements?address=0x6f0b...&direction=received"
 
 # Server-signed verification of an expected score
 curl -X POST https://reputon-backend.fly.dev/v1/api/verify \
   -H "Content-Type: application/json" \
-  -d '{"address":"0xada...","score":932}'
+  -d '{"address":"0x6f0b...","score":387}'
 
-# Live contract info (bypasses cache)
+# Live contract info (bypasses cache, reads on-chain directly)
 curl https://reputon-backend.fly.dev/v1/onchain/info
+curl https://reputon-backend.fly.dev/v1/onchain/nft/info
+curl https://reputon-backend.fly.dev/v1/onchain/sybil/info
+curl https://reputon-backend.fly.dev/v1/onchain/nft/self-mint-allowed/genesis
 ```
 
-### Writes (Bearer API key, scope `write:evaluate`)
+### Session-authed routes (cookie, same-origin)
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/me/connections` | GET | Connector state for the analyzer cards |
+| `/api/me/connections/scan?source=credentials\|protocols` | GET | Wallet-scoped Passport / Snapshot scan |
+| `/api/me/connections/telegram` | POST | Verifies Telegram Login Widget payload |
+| `/api/me/credentials/record-mint` | POST | Audit-log a user-signed NFT mint |
+| `/api/me/evaluate` | POST | Build + compact bundle, return `signals_json` to sign |
+| `/api/me/evaluate?id={jobId}` | PATCH | Attach the user's signed EVM tx hash |
+| `/api/me/evaluate/cooldown` | GET | 30-day cooldown countdown state |
+
+### Writes via Bearer API key (`write:evaluate` scope) — service-to-service
 
 ```bash
-# Queue an AI evaluation
+# Queue an AI evaluation as a service integration. End users on the
+# website don't go through this path — they sign evaluate_and_update
+# directly from their wallet via /api/me/evaluate.
 curl -X POST https://reputon-backend.fly.dev/v1/api/evaluate \
   -H "Authorization: Bearer rk_test_XXX" \
   -H "Content-Type: application/json" \
   -d '{
-    "address": "0xada...",
+    "address": "0x6f0b...",
     "signals": {
-      "activity": "high",
-      "governance": "consistent",
-      "contributions": ["github:foo/bar#42"]
+      "github":   { "user": { "login": "alice", "followers": 142 } },
+      "protocols":{ "vote_count": 8, "spaces": [{"id":"linea","votes":3}] },
+      "credentials": { "score": 36.8, "stamps": 9, "passing": true }
     }
   }'
 ```
@@ -328,11 +389,23 @@ Full reference (with webhook signature verification snippet) in
 
 ## Authentication and security
 
-- **Wallet sign-in (SIWE):** any EVM wallet. Works without external config.
-- **Google OAuth:** enabled automatically once `AUTH_GOOGLE_ID` and
-  `AUTH_GOOGLE_SECRET` are set.
-- **Email magic-links:** enabled automatically once `SMTP_HOST` and
-  `AUTH_EMAIL_FROM` are set.
+Sign-in is **wallet-only** (SIWE / EIP-4361). On first wallet connect we
+auto-prompt the wallet to add and switch to GenLayer Studionet so every
+subsequent action lands on the right chain. The `ADMIN_WALLETS` env var
+(comma-separated, case-insensitive) auto-promotes matching wallets to
+`role=admin` on every sign-in.
+
+Per-user **connectors** for signal verification live in the standard
+Auth.js `account` table and are wired via env-gated providers:
+
+| Connector | Env vars |
+|---|---|
+| GitHub OAuth | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` |
+| X (Twitter) OAuth 2.0 | `AUTH_TWITTER_ID`, `AUTH_TWITTER_SECRET` |
+| Telegram Login Widget | `TELEGRAM_BOT_TOKEN`, `NEXT_PUBLIC_TELEGRAM_BOT_NAME` |
+| Gitcoin Passport scorer | `PASSPORT_API_KEY`, `PASSPORT_SCORER_ID` |
+| Tally governance read | `TALLY_API_KEY` |
+| Snapshot | public — no key needed |
 
 Other safeguards:
 
