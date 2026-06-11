@@ -18,7 +18,6 @@ import { signIn } from "next-auth/react";
 import {
   Github,
   Twitter,
-  Send,
   ShieldCheck,
   Vote,
   AlertTriangle,
@@ -29,7 +28,11 @@ import {
 type Providers = {
   github: { configured: boolean; connected: boolean; handle: string | null };
   twitter: { configured: boolean; connected: boolean; handle: string | null };
-  telegram: { configured: boolean; connected: boolean; handle: string | null };
+  // telegram is intentionally omitted from the analyzer UI — the LLM
+  // doesn't actually weight Telegram identity as a scoring signal, so
+  // exposing the connector created noise without scoring value. The
+  // backend endpoint /api/me/connections/telegram remains so any
+  // previously-linked rows stay clean, but no card is rendered.
 };
 
 type ConnectionsResponse = {
@@ -124,29 +127,6 @@ export function ConnectorCards() {
           ) : (
             <Pill variant="muted">Provider not configured</Pill>
           )
-        }
-      />
-
-      {/* Telegram — Login Widget */}
-      <Card
-        icon={<Send className="h-4 w-4" />}
-        title="Telegram"
-        sub="Verifies your Telegram identity via the official Login Widget."
-        right={
-          conn?.providers.telegram.connected ? (
-            <Pill variant="success">
-              @{conn.providers.telegram.handle ?? "linked"}
-            </Pill>
-          ) : !conn?.providers.telegram.configured ? (
-            <Pill variant="muted">Provider not configured</Pill>
-          ) : null
-        }
-        body={
-          conn?.providers.telegram.configured && !conn?.providers.telegram.connected ? (
-            <div className="overflow-x-auto">
-              <TelegramLogin onLinked={refresh} />
-            </div>
-          ) : null
         }
       />
 
@@ -335,74 +315,8 @@ function Hint({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Telegram Login Widget
-// ---------------------------------------------------------------------------
+// Telegram Login Widget removed — Telegram identity wasn't actually
+// weighted by the scoring LLM, so the connector created noise without
+// scoring value. The backend route /api/me/connections/telegram is kept
+// only so any legacy DB rows decode cleanly; nothing in the UI calls it.
 
-const TG_BOT_NAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME ?? "";
-
-/**
- * Renders the official Telegram Login Widget. Telegram serves the widget
- * as a script that posts auth_data to a global callback once the user
- * approves. We forward that payload to /api/me/connections/telegram for
- * HMAC verification + persistence.
- */
-function TelegramLogin({ onLinked }: { onLinked: () => void }) {
-  // Register the global callback Telegram will invoke after login. Hooks
-  // must be called unconditionally, so this runs even when TG_BOT_NAME
-  // is missing — the widget just never loads in that case.
-  useEffect(() => {
-    if (!TG_BOT_NAME) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).onTelegramAuth = async (payload: Record<string, unknown>) => {
-      try {
-        const r = await fetch("/api/me/connections/telegram", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (r.ok) onLinked();
-      } catch {
-        /* swallow */
-      }
-    };
-  }, [onLinked]);
-
-  // Inject the widget script with innerHTML on first mount. We do NOT use
-  // a React <script> element (React refuses to execute them) and we do
-  // NOT use document.createElement + appendChild with async=true, because
-  // Telegram's widget reads document.currentScript at load to know where
-  // to place the iframe, and currentScript is null for async-appended
-  // scripts in some browsers. innerHTML injection executes synchronously
-  // and gives the widget a real currentScript reference.
-  useEffect(() => {
-    if (!TG_BOT_NAME) return;
-    const slot = document.getElementById("tg-login-slot");
-    if (!slot || slot.dataset.mounted === "1") return;
-    slot.dataset.mounted = "1";
-    slot.innerHTML =
-      `<script async src="https://telegram.org/js/telegram-widget.js?22" ` +
-      `data-telegram-login="${TG_BOT_NAME}" ` +
-      `data-size="medium" ` +
-      `data-onauth="onTelegramAuth(user)" ` +
-      `data-request-access="write"></script>`;
-    // innerHTML doesn't execute injected <script> tags. Recreate them so
-    // they actually run.
-    Array.from(slot.querySelectorAll("script")).forEach((old) => {
-      const fresh = document.createElement("script");
-      for (const a of Array.from(old.attributes)) fresh.setAttribute(a.name, a.value);
-      fresh.text = old.text;
-      old.replaceWith(fresh);
-    });
-  }, []);
-
-  if (!TG_BOT_NAME) {
-    return (
-      <span className="text-[11px] text-accent">
-        Set <code className="rounded bg-background px-1">NEXT_PUBLIC_TELEGRAM_BOT_NAME</code> to your bot&apos;s @username.
-      </span>
-    );
-  }
-
-  return <div id="tg-login-slot" />;
-}
